@@ -111,10 +111,11 @@ CREATE TABLE `kiosk_accounts` (
 CREATE TABLE `students` (
   `id` int NOT NULL,
   `class_id` int NOT NULL,
-  `name` varchar(50) NOT NULL,
   `pin` varchar(10) NOT NULL,
   `is_initial_pin` tinyint(1) NOT NULL DEFAULT '1',
   `is_active` tinyint(1) DEFAULT '1',
+  `login_fail_count` int NOT NULL DEFAULT '0',
+  `locked_until` datetime DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `order_index` int NOT NULL DEFAULT '0'

@@ -53,9 +53,27 @@ if (!$student) {
     jsonError('학생 정보를 찾을 수 없습니다.');
 }
 
+// 잠금 상태 확인
+if ($student['locked_until'] && strtotime($student['locked_until']) > time()) {
+    jsonError('계정이 잠겨있습니다. 잠금 해제 후 다시 시도해주세요.');
+}
+
 if ($student['pin'] !== $pin) {
+    // 실패 횟수 증가
+    $newFailCount = (int)$student['login_fail_count'] + 1;
+    $pdo->prepare("UPDATE students SET login_fail_count = ? WHERE id = ?")
+        ->execute([$newFailCount, (int)$student['id']]);
+    // 임계치(5회) 초과 시 잠금
+    if ($newFailCount >= 5) {
+        $pdo->prepare("UPDATE students SET locked_until = DATE_ADD(NOW(), INTERVAL 30 MINUTE) WHERE id = ?")
+            ->execute([(int)$student['id']]);
+    }
     jsonError('비밀번호가 일치하지 않습니다.');
 }
+
+// PIN 성공 시 실패 횟수 초기화
+$pdo->prepare("UPDATE students SET login_fail_count = 0, locked_until = NULL WHERE id = ?")
+    ->execute([(int)$student['id']]);
 
 // 학생 세션 등록 (메모리 실명은 전달된 값 사용, DB 미저장)
 $_SESSION['student_id']           = (int)$student['id'];

@@ -93,15 +93,15 @@ CREATE TABLE `kiosk_accounts` (
 CREATE TABLE `students` (
   `id` int NOT NULL AUTO_INCREMENT,
   `class_id` int NOT NULL,
-  `name` varchar(50) NOT NULL,
   `pin` varchar(10) NOT NULL,
   `is_initial_pin` tinyint(1) NOT NULL DEFAULT '1',
   `is_active` tinyint(1) DEFAULT '1',
+  `login_fail_count` int NOT NULL DEFAULT '0',
+  `locked_until` datetime DEFAULT NULL,
   `order_index` int NOT NULL DEFAULT '0',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `unique_student_per_class` (`class_id`,`name`),
   KEY `class_id` (`class_id`),
   CONSTRAINT `students_ibfk_1` FOREIGN KEY (`class_id`) REFERENCES `classes` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

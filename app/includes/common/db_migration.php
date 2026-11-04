@@ -174,7 +174,13 @@ if (!function_exists('ensurePhase3PrivacySchema')) {
                 
                 // 기존 데이터가 있는 경우 name을 이용해 student_hash 역생성 채우기
                 try {
-                    $hasName = $pdo->query("SELECT name FROM students LIMIT 1");
+                    $hasName = false;
+                    try {
+                        $res = $pdo->query("SELECT name FROM students LIMIT 1");
+                        $hasName = (bool) $res;
+                    } catch (Exception $nameCheckEx) {
+                        // name 컬럼이 없음 -> 건너뜀
+                    }
                     if ($hasName) {
                         $migrStmt = $pdo->query("
                             SELECT s.id, s.class_id, s.name, c.class_salt 
@@ -203,11 +209,18 @@ if (!function_exists('ensurePhase3PrivacySchema')) {
             }
         }
 
-        // 4. students.name 컬럼 NULL 허용으로 완화 (Zero-Knowledge)
+        // 5. students.login_fail_count 컬럼 확인 및 추가
         try {
-            $pdo->exec("ALTER TABLE `students` MODIFY `name` VARCHAR(50) NULL DEFAULT NULL");
-        } catch (Exception $nameEx) {
-            // 이미 수정되었거나 name 컬럼이 없음
+            $pdo->query("SELECT login_fail_count FROM students LIMIT 1");
+        } catch (Exception $e) {
+            $pdo->exec("ALTER TABLE `students` ADD COLUMN `login_fail_count` INT NOT NULL DEFAULT '0' AFTER `is_active`");
+        }
+
+        // 6. students.locked_until 컬럼 확인 및 추가
+        try {
+            $pdo->query("SELECT locked_until FROM students LIMIT 1");
+        } catch (Exception $e) {
+            $pdo->exec("ALTER TABLE `students` ADD COLUMN `locked_until` DATETIME DEFAULT NULL AFTER `login_fail_count`");
         }
     }
 }

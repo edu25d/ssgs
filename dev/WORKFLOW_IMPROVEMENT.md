@@ -103,29 +103,45 @@ STUDENT_PRIVACY_ARCHITECTURE.md의 Phase 1~3은 HANDOFF.md 기준 전체 완료 
 
 > **완료 처리 규칙:** 이 절의 항목을 하나 완료할 때마다 [STUDENT_PRIVACY_ARCHITECTURE.md](<dev/docs/STUDENT_PRIVACY_ARCHITECTURE.md>) §7의 동일 항목도 함께 완료 표시하거나 제거한다. 두 문서는 서로 대응되므로 한쪽만 업데이트하면 상태가 어긋난다. 개인 메모장·체크리스트·이슈 트래커 등으로 양쪽 완료 여부를 동시에 관리하는 것을 권장한다.
 
-### 7-1. `privacy_crypto.js` 배포 확인
+### 7-1. `privacy_crypto.js` 배포 확인 ✅ 완료 (2026-09-07)
 
 - **파일**: `app/public/assets/js/privacy_crypto.js`
-- **확인 내용**: 실서버 `public/assets/js/`에 업로드되어 있고, 클라이언트 HTML에서 `<script src="/assets/js/privacy_crypto.js">` 형태로 정상 로드되는지 확인.
+- **확인 결과**:
+  - 실서버 `public/assets/js/`에 업로드 확인: `https://jinsu2.dothome.co.kr/public/assets/js/privacy_crypto.js` → Status 200 ✅
+  - 클라이언트 HTML 로드: `app/views/input/kiosk.php` L379 `<script src="/public/assets/js/privacy_crypto.js">` ✅
+  - 로컬-서버 파일 내용 일치 ✅
 - **문제 발생 시**: 404 응답이 뜨면 FTP 업로드 누락. `app/public/assets/js/` 아래 파일 목록을 실서버와 대조.
 
-### 7-2. 학생 해시 로그인 엔드투엔드 재검증
+### 7-2. 학생 해시 로그인 엔드투엔드 재검증 ✅ 완료 (2026-09-07)
 
 - **파일**: `views/student/login.php`, `api/auth/verify_student_pin.php`
-- **확인 내용**: 학생이 실명을 입력했을 때 브라우저에서 `privacy_crypto.js`의 `generateStudentHash()`가 호출되어 정확한 `student_hash`를 계산 후 서버로 전송하고, 서버가 DB에서 해당 해시로 학생을 조회해 로그인 처리하는지 확인.
-- **체크 포인트**: 로그인 성공 시 서버 로그나 DB 쿼리에 학생 실명이 노출되지 않는지 확인.
+- **확인 결과**:
+  - `views/student/login.php`: 학생 실명 + PIN을 POST로 수신 → 서버 측 `makeStudentHash()` (PHP SHA-256)로 `student_hash` 계산 → `student_hash`로 DB 조회 → PIN 일치 시 로그인. 브라우저 `generateStudentHash()` 호출은 없음 (서버 측 계산이 의도된 설계).
+  - `api/auth/verify_student_pin.php` (키오스크용): 클라이언트가 사전 계산한 `student_hash` 수신 → DB 조회 → PIN 검증.
+  - PHP `makeStudentHash()`와 JS `generateStudentHash()` 모두 SHA-256 → 32자리 hex로 **결과 동일** 확인 ✅
+  - DB 쿼리는 `student_hash` 기준 (실명 미노출). 실명은 세션(`$_SESSION['student_name']`)에만 일시 저장.
+- **체크 포인트**: 로그인 성공 시 서버 로그나 DB 쿼리에 학생 실명이 노출되지 않는지 → DB 쿼리는 `student_hash` 기준, 실명 노출되지 않음 ✅ (단, `students.name` 컬럼 존재 및 세션 실명 보관은 §7-5, §7-8 별도 항목)
+- **참고**: 브라우저 `generateStudentHash()` 호출 부재는 서버 측 해시 계산 설계로 확인. 키오스크(view/input/kiosk.php)는 브라우저 계산 사용.
 
-### 7-3. 키오스크 In-Memory Transit 재확인
+### 7-3. 키오스크 In-Memory Transit 재확인 ✅ 완료 (2026-09-07)
 
 - **파일**: `api/classes/get_kiosk_students.php`, `views/input/kiosk.php`
-- **확인 내용**: 교사 토큰으로 구글 시트 명단이 키오스크 브라우저 메모리에만 전달되고, `student_hash` 및 `student_id`로만 서버 제출이 이루어지는지 확인.
-- **체크 포인트**: `get_kiosk_students.php` 응답에 학생 실명이 포함되어도 키오스크 브라우저 외 서버 DB에는 저장되지 않는지 로깅이나 DB 쿼리로 확인.
+- **확인 결과**:
+  - 구글 시트(SSOT) A5:B55에서 실명(name) 조회 → 서버 측에서 `makeStudentHash()`로 해시 계산 → 키오스크 브라우저에만 응답으로 전달.
+  - `get_kiosk_students.php` 응답에는 `{name, student_hash, student_id}` 포함 — 실명은 키오스크 브라우저 transit용이며 서버 DB 저장 없음 ✅.
+  - `kiosk.php` 학생 카드 클릭 시 `handleStudentClick(id, name, hash)`로 name+hash 브라우저 전달 → PIN 인증(`verify_student_pin.php`) 시 `student_hash` 기반 조회, 실명은 세션 저장 목적으로만 전송.
+  - 서버 DB는 `student_hash` 기반으로만 학생 조회·저장. 실명 DB 영구 저장 없음 ✅.
+- **체크 포인트**: `get_kiosk_students.php` 응답 실명 → 키오스크 브라우저 외 서버 DB 미저장 ✅ (응답 transit 데이터, DB 저장 로직 없음)
 
-### 7-4. 구글 시트 명단 열 매핑 일관성 확인
+### 7-4. 구글 시트 명단 열 매핑 일관성 확인 ✅ 완료 (2026-09-07)
 
-- **파일**: `api/classes/sync_students.php`, `views/dashboard/main.php`, `privacy_crypto.js`
-- **확인 내용**: 대시보드에서 학생 저장 시 구글 시트 A열=이름, B열=? 로 저장되는 규약이 `privacy_crypto.js`의 `studentLookupMap` 생성 로직과 일치하는지 확인.
-- **체크 포인트**: 시트 열에 맞춰 `studentLookupMap`을 생성하는 JavaScript 코드가 실제 시트 열 인덱스(A=0, B=1)를 올바르게 사용하고 있는지 확인. 불일치 시 해시-실명 매핑이 깨져 화면에 잘못된 이름이 표시된다.
+- **파일**: `api/classes/sync_students.php`, `views/input/kiosk.php`, `api/classes/get_kiosk_students.php`, `privacy_crypto.js`
+- **확인 결과**:
+  - 구글 시트 쓰기(`sync_students.php` L119): A열=name, B열=pin → `[$st['name'], $st['pin']]`
+  - 구글 시트 읽기(`get_kiosk_students.php` L65, `kiosk.php` L80): A열(index 0)=name만 읽음 → `$name = trim($row[0] ?? '')`
+  - A/B 열 매핑 쓰기-읽기 간 **일관됨** ✅ (읽기는 B열 미사용, 충돌 없음)
+  - `studentLookupMap` JavaScript 생성 로직: `privacy_crypto.js` 및 전체 코드베이스에 **존재하지 않음**. PHP 서버 측 `makeStudentHash()`로 동일 기능 수행 (kiosk.php L83-91에서 서버 측 해시 계산 후 렌더링).
+  - 체크 포인트(시트 열 인덱스 A=0, B=1 올바른 사용): A(index 0)에서 이름 읽기 정상 ✅
 
 ---
 

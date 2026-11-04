@@ -183,17 +183,21 @@ HANDOFF.md(2026-10-30) 기준 Phase 1, 2, 3 전체가 완료되어 실서버(닷
 
 Phase 3은 HANDOFF.md 기준 100% 완료되었으나, 아래 항목은 구현 존재는 확인되었으나 **실서버에서 정상 동작 여부를 재점검할 필요가 있는 미세 항목** 또는 **문서와 실제 코드·스키마 간 불일치로 확인이 필요한 항목**이다. 상세와 진행 계획은 [WORKFLOW_IMPROVEMENT.md](<dev/WORKFLOW_IMPROVEMENT.md>) §7(확인·보완 항목) 및 §8(향후 검토 과제)로 이관한다.
 
-- **`privacy_crypto.js` 배포 확인**: `app/public/assets/js/privacy_crypto.js`가 실서버 `public/assets/js/`에 업로드되어 클라이언트에서 정상 로드되는지 확인.
-- **학생 해시 로그인 엔드투엔드**: `views/student/login.php`에서 학생이 실명을 입력했을 때 `student_hash`가 정확히 계산되어 DB 조회·로그인이 되는지 재검증.
-- **키오스크 In-Memory Transit 재확인**: `api/classes/get_kiosk_students.php`가 교사 토큰으로 구글 시트 명단을 키오스크 브라우저 메모리에만 전달하는지, 서버 DB에 남지 않는지 재확인.
-- **구글 시트 명단 열 매핑 일관성**: 대시보드 `sync_students.php` → 구글 시트(A5:B) → 클라이언트 `studentLookupMap` 간 열 위치(A=이름, B=?) 규약이 일관되게 유지되는 지 확인.
+- **`privacy_crypto.js` 배포 확인** ✅ 완료: `app/public/assets/js/privacy_crypto.js`가 실서버 `public/assets/js/`에 업로드되어 클라이언트에서 정상 로드됨 확인. `https://jinsu2.dothome.co.kr/public/assets/js/privacy_crypto.js` → 200 OK, 로컬-서버 내용 일치. (상세: [WORKFLOW_IMPROVEMENT.md](<dev/WORKFLOW_IMPROVEMENT.md>) §7-1)
+- **학생 해시 로그인 엔드투엔드** ✅ 완료: `views/student/login.php`는 서버 측 `makeStudentHash()`(PHP SHA-256)로 해시 계산 후 `student_hash`로 DB 조회·로그인 처리 확인. PHP `makeStudentHash()`와 JS `generateStudentHash()` 결과 동일. DB 쿼리는 `student_hash` 기준(실명 미노출). (상세: [WORKFLOW_IMPROVEMENT.md](<dev/WORKFLOW_IMPROVEMENT.md>) §7-2)
+- **키오스크 In-Memory Transit 재확인** ✅ 완료: `api/classes/get_kiosk_students.php`가 구글 시트(A5:B55) 명단과 `makeStudentHash()` 계산 결과를 키오스크 브라우저에만 응답으로 전달, 서버 DB에는 `student_hash` 기반으로만 저장 확인. 응답 실명은 transit용이며 DB 미저장. (상세: [WORKFLOW_IMPROVEMENT.md](<dev/WORKFLOW_IMPROVEMENT.md>) §7-3)
+- **구글 시트 명단 열 매핑 일관성** ✅ 완료: `sync_students.php`는 A열=name, B열=pin으로 기록. `get_kiosk_students.php`/`kiosk.php`는 A열(index 0)에서 이름 읽어 `makeStudentHash()` 계산. 쓰기-읽기 열 매핑 일관됨 확인. `studentLookupMap` JavaScript 로직은 코드에 없으며 PHP 서버 측 처리로 대체됨. (상세: [WORKFLOW_IMPROVEMENT.md](<dev/WORKFLOW_IMPROVEMENT.md>) §7-4)
 
 ### 7-5. 학생 로그인 세션 실명 보관 검토
 
 - **현상:** `views/student/login.php` login 성공 시 `$_SESSION['student_name'] = $student_name`을 설정한다. `api/auth/verify_student_pin.php`도 전달받은 `$studentName`을 세션에 저장한다.
 - **영향:** PHP 세션 저장소에 실명이 일시적으로 존재한다. `config/db.php`의 30분 무활동 타임아웃 또는 `api/auth/logout.php`·`views/student/logout.php` 로그아웃 처리로 파기된다.
 - **문서 표현과의 관계:** STUDENT_PRIVACY_ARCHITECTURE.md §2.1의 "서버의 비식별화(Zero PII)"는 **DB 및 영구 디스크 저장소** 기준으로 정확하나, "서버에 실명이 전혀 없다"는 식의 확장 해석은 정확하지 않다. §2.1과 §2.4에 세션 실명 일시 보관 주의사항이 반영되어 있다(본 수정 참조).
-- **위험도:** 서버 세션 저장소가 서버 내부에서만 접근 가능하고, 세션 수명이 제한되며, 로그아웃 시 파기된다면 실무상 수용 가능한 수준. 서버 세션 저장소 경로(`session.save_path`)가 공개 웹 루트 외부인지 서버 설정으로 확인 필요. PHP `session.cookie_httponly`·`session.cookie_secure` 설정이 코드에서 명시적이지 않으므로, HTTPS 환경이면 `session.cookie_secure = 1` 추가 검토 권장.
+- **위험도:** 서버 세션 저장소가 서버 내부에서만 접근 가능하고, 세션 수명이 제한되며, 로그아웃 시 파기된다면 실무상 수용 가능한 수준. 서버 세션 저장소 경로(`session.save_path`)가 공개 웹 루트 외부인지 서버 설정으로 확인 필요.
+- **권장 세션 보안 설정 (HTTPS 환경 기준):**
+  - `session.cookie_secure = 1`: 세션 쿠키가 평문 HTTP로 전송되는 것을 방지. 서버 환경(dothome)이 HTTPS라면 적용 권장.
+  - `session.cookie_httponly = 1`: JavaScript에서 세션 쿠키 접근 차단(XSS 방어). 현재 코드에서 명시적 설정이 없으므로 추가 검토.
+  - `session.save_path`가 공개 웹 루트(`public/`) 외부인지 확인: 기본값이라도 서버 설정으로 명시적 확인 권장.
 
 ### 7-6. 학생 로그인 name 기반 폴백 쿼리 검토
 
@@ -208,7 +212,12 @@ Phase 3은 HANDOFF.md 기준 100% 완료되었으나, 아래 항목은 구현 �
   - `verify_student_pin.php` §56–§58: PIN 불일치 시 단순 `jsonError` 반환. 실패 횟수 기록 없음, 계정 잠금 없음, 지연 없음.
   - `views/student/login.php` §69: PIN 불일치 시 에러 메시지 표시 후 재입력 유도만 함. 실패 횟수 기록 없음.
 - **잠재적 피해:** 4자리 PIN(10,000가지) + 방어 부재 조합으로 특정 학생의 PIN을 자동화 도구로 찾을 수 있음. 탈취된 학생 계정으로 가짜 시험지 제출, 답안 열람, PIN 변경, 이의신청 악용 가능. 다수 학생 대상 자동화 공격도 가능.
-- **상세:** [WORKFLOW_IMPROVEMENT.md](<dev/WORKFLOW_IMPROVEMENT.md>) §8-3에 처리 방향과 우선순위가 정리되어 있다. 실제 방어 코드 추가는 §8-3의 검토 결과에 따라 진행.
+- **상세:** [WORKFLOW_IMPROVEMENT.md](<dev/WORKFLOW_IMPROVEMENT.md>) §8-3에 처리 방향과 우선순위가 정리되어 있다. STUDENT_PRIVACY_ARCHITECTURE.md 관점에서의 처리 방향 개요는 아래와 같으며, 실제 방어 코드 추가는 §8-3의 검토 결과에 따라 진행한다.
+  - **최소 방어:** 로그인 실패 횟수를 기록하고, N회(예: 5회) 초과 시 계정 잠금 또는 PIN 재설정 요구. 잠금 해제 절차도 함께 설계.
+  - **속도 제한:** 동일 student_hash/class_id 조합에 대해 단위 시간당 시도 횟수 제한(예: 분당 10회).
+  - **CAPTCHA:** 자동화 스크립트 방어 목적. 학생-facing 화면 적용 시 사용성 영향 평가 필요.
+  - **`students.pin` 해시 전환 병행 검토:** PIN을 평문→해시로 변경하면 DB 유출 시 피해가 줄고 brute-force가 어려워지나, 4자리 숫자라 해시만으로는 충분하지 않으며 위 방어 3개 항목과 반드시 병행되어야 함.
+  - **우선순위:** §8-1, §8-2보다 우선. 로그인 보안은 기능 추가보다 먼저 확보하는 것이 원칙.
 
 > **관련 문서:** [HANDOFF.md](<dev/docs/HANDOFF.md>) (구현 완료 상세 및 실서버 배포 절차) | [PROJECT_GUIDE_SSOT.md](<dev/docs/PROJECT_GUIDE_SSOT.md>) (전체 아키텍처 및 I/O 명세)
 

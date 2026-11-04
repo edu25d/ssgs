@@ -37,19 +37,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Phase 3: 학생 이름 해시 계산
         $studentHash = makeStudentHash($classSalt, $student_name);
 
-        // student_hash 또는 (구버전 호환) name 매칭
-        try {
-            $stmt = $pdo->prepare("SELECT id, student_hash, pin, is_initial_pin FROM students WHERE class_id = ? AND student_hash = ? AND is_active = 1");
-            $stmt->execute([$class_id, $studentHash]);
-            $student = $stmt->fetch(PDO::FETCH_ASSOC);
-        } catch (Exception $e) {
-            $stmt = $pdo->prepare("SELECT id, pin, is_initial_pin FROM students WHERE class_id = ? AND name = ? AND is_active = 1");
-            $stmt->execute([$class_id, $student_name]);
-            $student = $stmt->fetch(PDO::FETCH_ASSOC);
-        }
+        // student_hash 기반 조회 (구버전 name 폴백 제거)
+        $stmt = $pdo->prepare("SELECT id, student_hash, pin, is_initial_pin FROM students WHERE class_id = ? AND student_hash = ? AND is_active = 1");
+        $stmt->execute([$class_id, $studentHash]);
+        $student = $stmt->fetch(PDO::FETCH_ASSOC);
         
         if ($student) {
-            if ($student['pin'] === $input_pin) {
+            // 잠금 상태 확인
+            if ($student['locked_until'] && strtotime($student['locked_until']) > time()) {
+                $error_message = "계정이 잠겨있습니다. 잠금 해제 후 다시 시도해주세요.";
+            } elseif ($student['pin'] === $input_pin) {
+                // PIN 성공 시 실패 횟수 초기화
+                $pdo->prepare("UPDATE students SET login_fail_count = 0, locked_until = NULL WHERE id = ?")
+                    ->execute([(int)$student['id']]);
                 $_SESSION['student_id']            = (int)$student['id'];
                 $_SESSION['student_hash']          = $student['student_hash'] ?? $studentHash;
                 $_SESSION['student_name']          = $student_name;
@@ -66,6 +66,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     exit;
                 }
             } else {
+                // PIN 불일치: 실패 횟수 증가 + 임계치(5회) 초과 시 잠금
+                $newFailCount = (int)$student['login_fail_count'] + 1;
+                $pdo->prepare("UPDATE students SET login_fail_count = ? WHERE id = ?")
+                    ->execute([$newFailCount, (int)$student['id']]);
+                if ($newFailCount >= 5) {
+                    $pdo->prepare("UPDATE students SET locked_until = DATE_ADD(NOW(), INTERVAL 30 MINUTE) WHERE id = ?")
+                        ->execute([(int)$student['id']]);
+                }
                 $error_message = "비밀번호(PIN)가 일치하지 않습니다.";
             }
         } else {

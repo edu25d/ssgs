@@ -45,14 +45,14 @@ if ($assignId) {
         require_once APP_ROOT . '/includes/common/upstage.php';
         $privacyMaskRois = getOrDetectPrivacyMaskRois($pdo, (int)$assignment['template_id'], $assignment);
         
-        $stuStmt = $pdo->prepare("SELECT id, name FROM students WHERE class_id = :class_id AND is_active = 1 ORDER BY order_index ASC, name ASC");
+        $stuStmt = $pdo->prepare("SELECT id, student_hash FROM students WHERE class_id = :class_id AND is_active = 1 ORDER BY order_index ASC, student_hash ASC");
         $stuStmt->execute(['class_id' => $classId]);
         $studentsList = $stuStmt->fetchAll(PDO::FETCH_ASSOC);
         
         foreach ($studentsList as $stu) {
             $studentsArray[] = [
                 'student_id' => (int)$stu['id'],
-                'name'       => $stu['name'],
+                'student_hash' => $stu['student_hash'],
                 'status'     => 'pending',
                 'images'     => []
             ];
