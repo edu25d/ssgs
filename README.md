@@ -25,14 +25,15 @@
 │   ├── index.php
 │   ├── .htaccess
 │   └── google_callback.php
-├── dev/          # 로컬 작업 문서.
+├── dev/          # 로컬 작업 문서. 서버 업로드 대상은 아니지만 깃허브 저장소에는 포함.
 │   ├── docs/     # STUDENT_PRIVACY_ARCHITECTURE.md 등 설계·기록 문서
 │   ├── SERVER_UPLOAD_GUIDE.md
 │   └── WORKFLOW_IMPROVEMENT.md
 └── .gitignore    # 커밋 배제 규칙
 ```
 
-- `app/` 아래가 서버 코드다. 닷홈 서버에는 `app/`의 내용만 올리면 된다(`app/` 자체나 `dev/`는 업로드 대상 아님).
+- 깃허브 저장소에는 `app/`과 `dev/`를 모두 포함한다. 버전 관리 및 사무실·집 간 최신 결과 공유용이다.
+- 닷홈 서버에는 `app/`의 내용(contents)만 올리면 된다(`app/` 자체나 `dev/`는 업로드 대상 아님).
 - `.env`는 실제 Credentials가 들어 있어 커밋하지 않는다. 서버에서는 `.env.example`을 복사해 값을 채워 사용한다.
 
 ## 학생 개인정보 처리 (개요)
