@@ -1557,7 +1557,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         // 최종 평가지 템플릿 생성 제출 (AJAX 멀티파트)
-        async function submitTemplate() {
+        async function submitTemplate(
+
             const titleInput = document.getElementById('title');
             const title = titleInput.value.trim();
 
