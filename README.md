@@ -24,11 +24,9 @@
 │   ├── template/ # 시험지 템플릿 이미지
 │   ├── index.php
 │   ├── .htaccess
-│   ├── google_callback.php
-│   └── db 스키마.sql
+│   └── google_callback.php
 ├── dev/          # 로컬 작업 문서.
 │   ├── docs/     # STUDENT_PRIVACY_ARCHITECTURE.md 등 설계·기록 문서
-│   ├── db_clean_reset.sql
 │   ├── SERVER_UPLOAD_GUIDE.md
 │   └── WORKFLOW_IMPROVEMENT.md
 └── .gitignore    # 커밋 배제 규칙
@@ -50,8 +48,7 @@
 ## 환경 설정
 
 1. `app/.env.example`을 복사해 `app/.env`를 만들고, DB 접속 정보 등 필요한 값을 채운다.
-2. DB 초기화가 필요하면 `dev/db_clean_reset.sql`을 닷홈 phpMyAdmin에서 실행한다.
-3. `app/` 내용을 닷홈 서버 루트로 올린다.
+2. `app/` 내용을 닷홈 서버 루트로 올린다. DB 스키마는 `db_migration.php` 실행 시 자동 생성·마이그레이션된다.
 
 업로드 대상·순서는 `dev/SERVER_UPLOAD_GUIDE.md`와 `dev/WORKFLOW_IMPROVEMENT.md`를 본다.
 
@@ -64,9 +61,8 @@
 
 - `dev/docs/STUDENT_PRIVACY_ARCHITECTURE.md` — 학생 개인정보 보호 아키텍처 및 확인 과제
 - `dev/docs/PROJECT_GUIDE_SSOT.md` — 전체 아키텍처·역할 분담
-- `dev/WORKFLOW_IMPROVEMENT.md` — 서버 업로드 대상 구분 규칙, 향후 검토 과제
+- `dev/WORKFLOW_IMPROVEMENT.md` — 서버 업로드 대상 구분 규칙, 향후 검토 과제 (DB 스키마 파일은 2026-11-07 삭제, 스키마는 코드 기반으로 관리)
 - `dev/SERVER_UPLOAD_GUIDE.md` — 서버 업로드 실무 가이드
-- `dev/db_clean_reset.sql` — DB 초기화 스크립트
 
 ## 상태
 

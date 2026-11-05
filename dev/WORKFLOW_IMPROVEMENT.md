@@ -23,12 +23,10 @@
 │   ├── template/
 │   ├── index.php
 │   ├── .htaccess
-│   ├── google_callback.php
-│   └── db 스키마.sql
+│   └── google_callback.php
 ├── dev/              ← 로컬 전용 작업물 (서버 업로드 대상 아님)
 │   ├── docs/
 │   ├── GEMINI.md
-│   ├── db_clean_reset.sql
 │   ├── SERVER_UPLOAD_GUIDE.md
 │   └── WORKFLOW_IMPROVEMENT.md
 ├── .env              ← 로컬만. 서버 업로드 제외 (app/.env에 위치)
@@ -44,8 +42,8 @@
 
 ### transition: 적용된 변경사항
 
-1. 서버 대상 파일/폴더 (`api/`, `config/`, `public/`, `template/`, `views/`, `grading/`, `includes/`, `index.php`, `.htaccess`, `google_callback.php`, `db 스키마.sql`) → `app/`으로 이동
-2. 로컬 전용 파일/폴더 (`docs/`, `GEMINI.md`, `db_clean_reset.sql`, `gemini_debug.log`(이후 정리됨), `whoami.txt`(이후 삭제됨), `SERVER_UPLOAD_GUIDE.md`, `WORKFLOW_IMPROVEMENT.md`) → `dev/`로 이동
+1. 서버 대상 파일/폴더 (`api/`, `config/`, `public/`, `template/`, `views/`, `grading/`, `includes/`, `index.php`, `.htaccess`, `google_callback.php`, `db 스키마.sql`) → `app/`으로 이동 (완료, `db 스키마.sql`은 이후 삭제됨)
+2. 로컬 전용 파일/폴더 (`docs/`, `GEMINI.md`, `db_clean_reset.sql`, `gemini_debug.log`(이후 정리됨), `whoami.txt`(이후 삭제됨), `SERVER_UPLOAD_GUIDE.md`, `WORKFLOW_IMPROVEMENT.md`) → `dev/`로 이동 (완료, `db_clean_reset.sql`은 이후 삭제됨)
 3. `.env`, `.env.example` → `app/`으로 이동 (서버 업로드 시 `.env`는 제외)
 4. `app/config/env.php` → `APP_ROOT` 정의에 `app/` 구조 주석 추가
 5. `.upload_ignore` 파일 생성 (루트에 위치, 업로드 제외 패턴 명시)
@@ -153,19 +151,18 @@ STUDENT_PRIVACY_ARCHITECTURE.md의 Phase 1~3은 HANDOFF.md 기준 전체 완료 
 
 - **현상**: 채점 관련 PHP 파일이 두 곳에 나뉘어 있다.
   - `app/grading/objective.php`
-  - `app/grading/roi_inspector.php`
   - `app/grading/get_results.php`
   - `app/grading/grading_review.php`
   - `app/grading/NanumGothic.ttf`
   - `app/includes/grading/objective.php` (별도 존재)
 - **PROJECT_GUIDE_SSOT.md 기술과의 불일치**: 동 문서 §4 I/O 일람표는 `includes/grading/objective.php`를 채점 모듈로 기술하고 있으나, 실제 `app/grading/objective.php`가 별도로 존재한다. 어느 파일이 실제 채점을 담당하는지 확인이 필요하다.
-- **`roi_inspector.php` 상태**: `리팩토링-ssot.md`(삭제됨)의 이행 표에서 "제거 대상"으로 언급된 파일이다. 현재 `app/grading/roi_inspector.php`가 남아 있는 이유(레거시 잔재인지, 아직 사용 중인지)를 확인해야 한다.
+- **`roi_inspector.php` 상태**: `리팩토링-ssot.md`(삭제됨)의 이행 표에서 "제거 대상"으로 언급된 파일이다. **2026-11-07에 삭제 완료** — `app/views/grading/roi_inspector.php`(원본)와 `app/grading/roi_inspector.php`(하위 호환 프록시)가 모두 삭제되었다. 원본은 로컬 점검용 개발 파일, 프록시는 원본 삭제 후 단독 의미가 없어져 함께 삭제.
 - **`NanumGothic.ttf` 위치**: 폰트 파일이 `app/grading/` 아래에 있다. `app/public/assets/fonts/`로 옮기는 것이 폴더 용도에 부합할 수 있다.
 
 **처리 방향 (미정)**:
 1. `app/grading/objective.php`와 `app/includes/grading/objective.php` 중 실제 채점을 담당하는 파일을 확인.
 2. 중복이라면 한쪽으로 일원화하거나, 양쪽이 각각 다른 역할을 한다면 그 차이를 문서에 명시.
-3. `roi_inspector.php`가 미사용 레거시라면 삭제, 사용 중이라면 `PROJECT_GUIDE_SSOT.md`에 역할 추가.
+3. **`roi_inspector.php`**: 삭제 완료. 추가 조치 불필요.
 4. `NanumGothic.ttf`의 위치를 `public/assets/fonts/`로 이동할지 검토.
 
 ### 8-2. `.v1104/` 폴더 정리 (선택)
@@ -173,23 +170,22 @@ STUDENT_PRIVACY_ARCHITECTURE.md의 Phase 1~3은 HANDOFF.md 기준 전체 완료 
 - `.upload_ignore`에 업로드 제외로 등록되어 있으나, 폴더 내 내용(뷰 백업, 템플릿 테스트 이미지, 크롭 이미지 등)이 현재 코드베이스와 어떤 관계인지 문서화되어 있지 않다.
 - 정리 시 우선순위: 내용 확인 → 현재 `app/`에 동일 파일 존재 여부 확인 → 불필요 시 삭제, 백업이 필요하면 `dev/backup/`로 이동 후 문서화.
 
-### 8-3. PIN brute-force 방어 추가 (보안 우선 과제)
+### 8-3. PIN brute-force 방어 추가 (보안 우선 과제) ✅ 완료 (2026-11-07)
 
-- **현상:** 학생 PIN(4자리 숫자) 로그인 진입점 두 곳(`api/auth/verify_student_pin.php`, `views/student/login.php`) 모두 로그인 시도 횟수 제한, 속도 제한, 계정 잠금, CAPTCHA 등 brute-force 방어 수단이 없다.
-- **코드상 확인 사항:**
-  - `verify_student_pin.php` §56–§58: PIN 불일치 시 단순 `jsonError` 반환. 실패 횟수 기록, 계정 잠금, 지연 없음.
-  - `views/student/login.php` §69: PIN 불일치 시 에러 메시지 표시 후 재입력 유도만 함. 실패 횟수 기록, 계정 잠금, 지연 없음.
-- **잠재적 피해:** 방어 부재 + 4자리 PIN(10,000가지) 조합으로 특정 학생의 PIN을 자동화 도구로 찾을 수 있음. 탈취된 학생 계정으로 가짜 시험지 제출, 답안 열람, PIN 변경, 이의신청 악용 가능. 다수 학생 대상 자동화 공격도 가능.
-- **상세 피해 시나리오:** [dev/docs/STUDENT_PRIVACY_ARCHITECTURE.md](<dev/docs/STUDENT_PRIVACY_ARCHITECTURE.md>) §7-5 및 세션 내 PIN 공격 검토 참고.
+- **현상(과거):** 학생 PIN(4자리 숫자) 로그인 진입점 두 곳(`api/auth/verify_student_pin.php`, `views/student/login.php`) 모두 로그인 시도 횟수 제한, 계정 잠금 등 brute-force 방어 수단이 없었다.
+- **현재 상태: 최소 방어 이미 구현됨**
+  - DB 스키마: `students` 테이블에 `login_fail_count int NOT NULL DEFAULT 0`, `locked_until datetime DEFAULT NULL` 컬럼 존재 (현행 스키마에 포함, 구 `app/db 스키마.sql`·`dev/db_clean_reset.sql` 참조 파일은 2026-11-07 삭제됨).
+  - `api/auth/verify_student_pin.php` L61–76: PIN 불일치 시 `login_fail_count` +1, 5회 도달 시 `locked_until`을 현재 시각 + 30분으로 설정. 잠금 상태이면 L57–59에서 사전 차단.
+  - `views/student/login.php` L68–78: 동일 패턴 — PIN 불일치 시 `login_fail_count` 증가, 5회 이상 시 30분 잠금. PIN 성공/LOCK 해제 시 L51–52에서 `login_fail_count = 0`, `locked_until = NULL` 초기화.
+  - 화면에 잠금 안내 표시: `verify_student_pin.php`는 `jsonError('계정이 잠겨있습니다.')`, `login.php`는 `$error_message`로 "계정이 잠겨있습니다. 잠금 해제 후 다시 시도해주세요." 표시.
+- **완료 근거:** §8-3에서 요구한 **최소 방어 — 실패 횟수 기록 + N회(5회) 초과 시 계정 잠금 + 잠금 해제 절차(성공 시 초기화)** 가 두 진입점에 모두 구현되어 있다.
 
-**처리 방향 (미정 — 우선 검토 필요):**
-1. **최소 방어부터 검토:** 로그인 실패 횟수를 `students` 테이블 또는 별도 테이블에 기록하고, N회(예: 5회) 초과 시 계정 잠금 또는 PIN 재설정 요구. 잠금 해제 절차도 함께 설계.
-2. **속도 제한 검토:** 동일한 student_hash/class_id 조합에 대해 단위 시간당 시도 횟수 제한(예: 분당 10회).
-3. **CAPTCHA 도입 검토:** 자동화 스크립트 방어 목적. 학생-facing 로그인 화면에 적용 시 사용성 영향 평가 필요.
-4. **세션 기반 방어 검토:** 이미 로그인된 세션에서의 PIN 변경(`change_pin.php`)은 별도 보호가 되어 있으나, 새 세션에서의 로그인 brute-force와는 별개. 혼동하지 말 것.
-5. **`students.pin` 해시 전환 병행 검토:** PIN을 평문에서 해시로 변경하면 DB 유출 시 피해가 줄고 brute-force도 어려워짐. 다만 4자리 숫자라 해시해도 보안 효과가 제한적이므로, 해시 전환만으로는 충분하지 않고 위 방어 1~3이 반드시 병행되어야 함.
+**잔여 검토 항목 (미처리 — 별도 과제로 이관):**
+1. **속도 제한(rate limiting):** 동일 `student_hash`/`class_id` 조합의 단위 시간당 시도 횟수 제한은 현재 없음.
+2. **CAPTCHA 도입:** 자동화 스크립트 방어 목적. 학생-facing 화면 적용 시 사용성 영향 평가 필요.
+3. **`students.pin` 해시 전환:** PIN이 `varchar(10)` 평문으로 저장됨 (현행 스키마상 `students.pin varchar(10) NOT NULL`). 4자리 숫자라 해시 전환만으로는 방어 효과가 제한적이나, DB 유출 대비책으로 별도 검토 가치 있음. 위 1, 2번과 병행 검토 필요.
 
-**우선순위:** §8-1, §8-2보다 우선. 로그인 보안은 기능 추가보다 먼저 확보하는 것이 원칙.
+- **우선순위:** §8-3의 최소 방어는 완료. 잔여 3개 항목은 §8-1, §8-2와 병행 검토 가능. 로그인 보안은 기능 추가보다 먼저 확보하는 것이 원칙이나, 최소 방어는 이미 확보됨.
 
 ### 8-4. 클라이언트 마스킹 실패 시 전송 처리 (방안 A 채택)
 

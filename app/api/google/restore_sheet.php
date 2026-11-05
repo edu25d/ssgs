@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * api/google/restore_sheet.php
  * 구글 시트 및 드라이브 원본 파일로부터 채점 데이터 및 크롭 이미지 복원 (Zero-PII 직결 방식)
@@ -6,6 +6,7 @@
 
 require_once dirname(__DIR__, 2) . '/config/db.php';
 require_once APP_ROOT . '/includes/common/auth.php';
+require_once APP_ROOT . '/includes/common/privacy_helper.php';
 require_once APP_ROOT . '/includes/google/google_drive_helper.php';
 
 $userId = requireTeacherAuth();
@@ -77,12 +78,17 @@ try {
     $roiList = json_decode($assignment['roi_data'], true) ?: [];
     $pdo->beginTransaction();
 
+    // 클래스 솔트 조회 (restore_sheet.php student_hash 조회용)
+    $classSaltStmt = $pdo->prepare("SELECT class_salt FROM classes WHERE id = ?");
+    $classSaltStmt->execute([$assignment['class_id']]);
+    $classSalt = (string)$classSaltStmt->fetchColumn();
+
     foreach ($studentRows as $student) {
         $studentName = $student['student_name'];
         $reconstructedResults = json_decode($student['raw_results_json'], true) ?: [];
 
-        $stuStmt = $pdo->prepare("SELECT id FROM students WHERE class_id = :class_id AND name = :name");
-        $stuStmt->execute(['class_id' => $assignment['class_id'], 'name' => $studentName]);
+        $stuStmt = $pdo->prepare("SELECT id FROM students WHERE class_id = :class_id AND student_hash = :hash");
+        $stuStmt->execute(['class_id' => $assignment['class_id'], 'hash' => makeStudentHash($classSalt, $studentName)]);
         $studentData = $stuStmt->fetch(PDO::FETCH_ASSOC);
         
         $studentId = $studentData['id'] ?? null;

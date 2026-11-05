@@ -30,7 +30,6 @@ app/
 ├── grading/              → 채점 PHP 파일 + NanumGothic.ttf
 ├── includes/             → 공통 include (common, google, grading)
 ├── .htaccess             → Apache 라우팅/보안 설정
-├── db 스키마.sql         → DB 구조 (초기 세팅 시)
 ├── google_callback.php   → Google OAuth 콜백
 └── index.php             → 메인 진입점
 ```
@@ -40,7 +39,7 @@ app/
 | 대상 | 판단 기준 |
 |---|---|
 | `app/config/env.php` | `.env` 파일 paths가 `app/.env`를 참조하도록 설정되어 있음. 서버에는 `app/` 폴더가 없으므로, 서버 루트의 `.env`를 참조하도록 조정 필요 |
-| `db_clean_reset.sql` | `dev/`에 있음. 운영 서버엔 불필요, 개발/테스트용 서버에만 필요시 `app/`으로 임시 이동 후 업로드 |
+| `db_clean_reset.sql` | 삭제됨 (2026-11-07). 과거 로컬 DB 초기화용 임시 파일. 현재 스키마는 코드(`db_migration.php` 등)에 내재된 정보로 확인. |
 
 ---
 

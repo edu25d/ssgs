@@ -17,7 +17,8 @@
   - `classes` 테이블에 `class_name` (예: "3학년 2반") 보관.
   - `students` 테이블에 `name` (학생 실명), `pin` (비밀번호), `order_index` (출석번호) 보관.
   - `students.class_id` ➔ `classes.id` ➔ `users.id` (학교명 `school_name`, 교사 실명)가 외래키로 완전 정규화되어 있어, 단 한 번의 쿼리로 `[학교명 + 학년/반 + 출석번호 + 학생 실명 + 성적]`이 결합되어 영구 저장됨.
-  - **현재 진행 중인 작업:** Phase 3의 제로-지식 설계 목표는 `students.name` 컬럼을 제거하여 실명을 서버 DB에서 없애는 것이나, **현재 DB 스키마(`app/db 스키마.sql`, `dev/db_clean_reset.sql`)에는 `students.name` 컬럼이 남아 있다.** `db_migration.php`의 `ensurePhase3PrivacySchema()`는 해당 컬럼을 NULL 허용으로 완화하려는 시도만 했을 뿐, 컬럼 자체를 삭제하지는 않았다. 또한 `views/input/bulk.php`가 `SELECT id, name FROM students`로 실명을 직접 조회하는 등, 실명 컬럼에 의존하는 코드가 존재한다. (상세: §7-8)
+  - **현재 상태:** Phase 3의 제로-지식 설계 목표였던 `students.name` 컬럼 제거는 **이미 완료**되었다 — 현행 DB 스키마에 `students.name` 컬럼은 존재하지 않으며, 구 스키마 파일(`app/db 스키마.sql`, `dev/db_clean_reset.sql`)도 2026-11-07에 삭제되었다. `views/input/bulk.php`도 현재는 `SELECT id, student_hash FROM students`만 조회하여 실명 DB 조회를 하지 않는다. (상세: §7-8)
+  - **잔여 name 의존 코드:** `api/google/restore_sheet.php`의 `name` 기반 조회는 **2026-11-07 student_hash 기반으로 전환 완료** (§7-8 본문 참조). 구 `db 스키마.sql`·`db_clean_reset.sql`은 삭제 완료. (상세: §7-8)
 - **학생 PIN 평문(Plaintext) 저장**:
   - `students.pin` 컬럼이 `varchar(10)`로 단방향 암호화 없이 평문 저장되고 있으며, `api/classes/get_students.php` API 응답으로 평문 노출됨.
 
@@ -45,8 +46,12 @@
 ### 2.1. 핵심 설계 원칙 — 설계 목표는 확정, 구현 완료 여부 구분 필요
 1. **단일 진실 공급원(SSOT)**: 학생의 실명은 **오직 교사/학교 소유의 공식 구글 스프레드시트에만 보관**한다. 서버는 구글 시트에서 이름을 읽어올 수 있으나, 이를 서버 DB에 영구 저장하지 않는다.
 2. **서버 영구 저장소의 비식별화(Zero PII)**: 쌤글라스 서버 **DB 및 영구 디스크 저장소**(원본 이미지, 크롭 이미지, DB 테이블)에는 학생의 실명, 출석번호, 식별 가능한 인적사항을 일절 저장하지 않는다. 단, 로그인 세션 처리 목적으로 **서버 세션 저장소**에 실명이 일시적으로 보관될 수 있으며, 이는 세션 수명(30분 무활동 타임아웃 또는 로그아웃 시 파기) 동안만 존재한다.
-   - **⚠️ 현행 불일치:** 위 원칙은 설계 목표이나, 현재 `students` DB 테이블에 `name` VARCHAR(50) 컬럼이 여전히 존재하며 NOT NULL로 정의되어 있다(`app/db 스키마.sql` §114, `dev/db_clean_reset.sql` §96). `db_migration.php`의 `ensurePhase3PrivacySchema()` §206–§211은 이 컬럼을 NULL 허용으로 완화하려 했을 뿐 컬럼을 삭제하지 않았고, `views/input/bulk.php`는 `SELECT id, name FROM students`로 실명을 DB에서 직접 조회한다. **즉 "서버 DB에 실명이 없다"는 문서는 아직 구현 완료된 상태가 아니며, 컬럼 삭제와 관련 코드 수정이 필요한 현안이다.** (상세: §7-8)
-   - **정확한 표현:** "서버 DB 및 영구 디스크 저장소에 실명이 없다"는 문장은 **완료된 상태가 아니라 설계 목표**로 이해해야 하며, 현재 코드/스키마 기준으로는 사실이 아니다. "서버 세션 저장소에 실명이 일시 보관될 수 있다"는 표현은 여전히 정확하다.
+   - **⚠️ 현행 불일치 (대부분 해소, 잔여 이슈 있음):**
+     - `students.name` 컬럼은 **이미 제거됨** — 현행 스키마에 `name` 컬럼은 존재하지 않으며, 구 스키마 파일(`app/db 스키마.sql`, `dev/db_clean_reset.sql`)도 2026-11-07에 삭제되었다.
+     - `views/input/bulk.php`도 현재는 `SELECT id, student_hash FROM students`만 조회하여 실명 DB 직접 조회를 하지 않는다.
+     - `db_migration.php`의 `students.name` NULL 허용 완화 코드(§206–§211)는 name 컬럼이 존재하지 않으므로 실행되지 않는 dead code이며, 추후 정리 가능하다.
+     - **잔여 name 의존 코드:** `api/google/restore_sheet.php`의 `name` 기반 조회(`SELECT id FROM students WHERE name = :name`)는 **2026-11-07 student_hash 기반으로 전환 완료**. `classes.class_salt` + `makeStudentHash()`로 `student_hash` 계산 후 `WHERE student_hash = :hash` 조회. (상세: §7-8)
+   - **정확한 표현:** "서버 DB 및 영구 디스크 저장소에 실명이 없다"는 문장은 **name 컬럼 제거가 완료된 현재 대부분 사실**이나, 잔여 name 의존 코드(`restore_sheet.php`)가 있는 점은 구분이 필요하다. "서버 세션 저장소에 실명이 일시 보관될 수 있다"는 표현은 여전히 정확하다.
 3. **프론트엔드 실시간 결합(Client-Side Join)**: 검수 화면 등에서 필요한 실명 표시는 교사의 개인 PC 브라우저 메모리상에서만 동적으로 결합하여 표시한다. 실명은 구글 시트(SSOT)에서 읽어온 값을 브라우저 세션/메모리에서 사용하며, 서버 DB에서 조회하지 않는다.
 
 ### 2.2. '출석번호(Row Index)' 사용 불가 사유 (법적 근거) — 설계 근거로 보존 (변경 없음)
@@ -187,6 +192,8 @@ Phase 3은 HANDOFF.md 기준 100% 완료되었으나, 아래 항목은 구현 �
 - **학생 해시 로그인 엔드투엔드** ✅ 완료: `views/student/login.php`는 서버 측 `makeStudentHash()`(PHP SHA-256)로 해시 계산 후 `student_hash`로 DB 조회·로그인 처리 확인. PHP `makeStudentHash()`와 JS `generateStudentHash()` 결과 동일. DB 쿼리는 `student_hash` 기준(실명 미노출). (상세: [WORKFLOW_IMPROVEMENT.md](<dev/WORKFLOW_IMPROVEMENT.md>) §7-2)
 - **키오스크 In-Memory Transit 재확인** ✅ 완료: `api/classes/get_kiosk_students.php`가 구글 시트(A5:B55) 명단과 `makeStudentHash()` 계산 결과를 키오스크 브라우저에만 응답으로 전달, 서버 DB에는 `student_hash` 기반으로만 저장 확인. 응답 실명은 transit용이며 DB 미저장. (상세: [WORKFLOW_IMPROVEMENT.md](<dev/WORKFLOW_IMPROVEMENT.md>) §7-3)
 - **구글 시트 명단 열 매핑 일관성** ✅ 완료: `sync_students.php`는 A열=name, B열=pin으로 기록. `get_kiosk_students.php`/`kiosk.php`는 A열(index 0)에서 이름 읽어 `makeStudentHash()` 계산. 쓰기-읽기 열 매핑 일관됨 확인. `studentLookupMap` JavaScript 로직은 코드에 없으며 PHP 서버 측 처리로 대체됨. (상세: [WORKFLOW_IMPROVEMENT.md](<dev/WORKFLOW_IMPROVEMENT.md>) §7-4)
+- **PIN brute-force 방어 (§7-7)** ✅ 완료: `login_fail_count` + `locked_until` 기반 최소 방어(5회 실패 시 30분 잠금, 성공 시 초기화)가 `verify_student_pin.php`와 `login.php`에 이미 구현됨. 잔여 항목(속도 제한, CAPTCHA, PIN 해시 전환)은 별도 과제로 이관. (상세: [WORKFLOW_IMPROVEMENT.md](<dev/WORKFLOW_IMPROVEMENT.md>) §8-3)
+- **students.name 컬럼 제거 (§7-8)** ✅ 완료: `students` 테이블에서 `name` 컬럼 제거 완료, 구 스키마 파일(`app/db 스키마.sql`, `dev/db_clean_reset.sql`)도 삭제. `bulk.php` 및 `restore_sheet.php`의 실명 DB 조회가 모두 `student_hash` 기반으로 변경됨. `db_migration.php`의 `name` 관련 dead code(§206–§211, §175–§191)만 잔여. (상세: §7-8 본문, [WORKFLOW_IMPROVEMENT.md](<dev/WORKFLOW_IMPROVEMENT.md>) §8-1·§8-3 참조 정리)
 
 ### 7-5. 학생 로그인 세션 실명 보관 검토
 
@@ -205,37 +212,38 @@ Phase 3은 HANDOFF.md 기준 100% 완료되었으나, 아래 항목은 구현 �
 - **영향:** 이 폴백이 활성화되면 실명으로 학생을 조회하게 되어, 제로-지식 아키텍처의 실명 비식별 원칙과 완전히 맞지 않는다. 구버전 호환용인지가 불분명하다.
 - **확인 필요:** 이 폴백이 의도된 구버전 호환 백업인지, 제거 대상인지 코드 작성자와 확인. 유지한다면 "구버전 호환 폴백"임을 문서에 명시하고, 제거 예정이라면 제거 계획 수립.
 
-### 7-7. PIN brute-force 방어 부재 검토 (보안 우선)
+### 7-7. PIN brute-force 방어 부재 검토 (보안 우선) ✅ 완료 (2026-11-07)
 
-- **현상:** 학생 PIN 로그인 진입점 두 곳(`api/auth/verify_student_pin.php`, `views/student/login.php`) 모두 로그인 시도 횟수 제한, 속도 제한, 계정 잠금, CAPTCHA 등 brute-force 방어 수단이 없다.
-- **코드상 확인:**
-  - `verify_student_pin.php` §56–§58: PIN 불일치 시 단순 `jsonError` 반환. 실패 횟수 기록 없음, 계정 잠금 없음, 지연 없음.
-  - `views/student/login.php` §69: PIN 불일치 시 에러 메시지 표시 후 재입력 유도만 함. 실패 횟수 기록 없음.
-- **잠재적 피해:** 4자리 PIN(10,000가지) + 방어 부재 조합으로 특정 학생의 PIN을 자동화 도구로 찾을 수 있음. 탈취된 학생 계정으로 가짜 시험지 제출, 답안 열람, PIN 변경, 이의신청 악용 가능. 다수 학생 대상 자동화 공격도 가능.
-- **상세:** [WORKFLOW_IMPROVEMENT.md](<dev/WORKFLOW_IMPROVEMENT.md>) §8-3에 처리 방향과 우선순위가 정리되어 있다. STUDENT_PRIVACY_ARCHITECTURE.md 관점에서의 처리 방향 개요는 아래와 같으며, 실제 방어 코드 추가는 §8-3의 검토 결과에 따라 진행한다.
-  - **최소 방어:** 로그인 실패 횟수를 기록하고, N회(예: 5회) 초과 시 계정 잠금 또는 PIN 재설정 요구. 잠금 해제 절차도 함께 설계.
-  - **속도 제한:** 동일 student_hash/class_id 조합에 대해 단위 시간당 시도 횟수 제한(예: 분당 10회).
-  - **CAPTCHA:** 자동화 스크립트 방어 목적. 학생-facing 화면 적용 시 사용성 영향 평가 필요.
-  - **`students.pin` 해시 전환 병행 검토:** PIN을 평문→해시로 변경하면 DB 유출 시 피해가 줄고 brute-force가 어려워지나, 4자리 숫자라 해시만으로는 충분하지 않으며 위 방어 3개 항목과 반드시 병행되어야 함.
-  - **우선순위:** §8-1, §8-2보다 우선. 로그인 보안은 기능 추가보다 먼저 확보하는 것이 원칙.
+- **현상(과거):** 학생 PIN 로그인 진입점 두 곳(`api/auth/verify_student_pin.php`, `views/student/login.php`) 모두 로그인 시도 횟수 제한, 계정 잠금 등 brute-force 방어 수단이 없었다.
+- **현재 상태: 최소 방어 이미 구현됨**
+  - DB 스키마: `students` 테이블에 `login_fail_count int NOT NULL DEFAULT 0`, `locked_until datetime DEFAULT NULL` 컬럼 존재.
+  - `api/auth/verify_student_pin.php`: PIN 불일치 시 `login_fail_count` +1, 5회 도달 시 `locked_until` 30분 설정. 잠금 상태이면 사전 차단(`jsonError('계정이 잠겨있습니다.')`).
+  - `views/student/login.php`: 동일 패턴 — PIN 불일치 시 `login_fail_count` 증가, 5회 이상 시 30분 잠금. 화면에 "계정이 잠겨있습니다. 잠금 해제 후 다시 시도해주세요." 표시. PIN 성공 시 `login_fail_count = 0`, `locked_until = NULL` 초기화.
+  - **완료 근거:** §7-7에서 요구한 **최소 방어 — 실패 횟수 기록 + N회(5회) 초과 시 계정 잠금 + 잠금 해제(성공 시 초기화)** 가 두 진입점에 구현 완료됨.
+- **잔여 검토 항목 (미처리 — 별도 과제):**
+  1. **속도 제한(rate limiting):** 동일 `student_hash`/`class_id` 조합의 단위 시간당 시도 횟수 제한 없음.
+  2. **CAPTCHA:** 자동화 스크립트 방어 목적. 학생-facing 화면 적용 시 사용성 영향 평가 필요.
+  3. **`students.pin` 해시 전환:** PIN `varchar(10)` 평문 저장 상태. 4자리 숫자라 해시만으로 충분하지 않으나, DB 유출 대비책으로 별도 검토 가치 있음.
+
+> **처리 완료:** WORKFLOW_IMPROVEMENT.md §8-3도 함께 완료 처리됨 (동일 항목).
 
 > **관련 문서:** [HANDOFF.md](<dev/docs/HANDOFF.md>) (구현 완료 상세 및 실서버 배포 절차) | [PROJECT_GUIDE_SSOT.md](<dev/docs/PROJECT_GUIDE_SSOT.md>) (전체 아키텍처 및 I/O 명세)
 
 > **작업 완료 처리 규칙:** §7의 항목을 하나 완료할 때마다 [WORKFLOW_IMPROVEMENT.md](<dev/WORKFLOW_IMPROVEMENT.md>) §7의 해당 항목도 함께 완료 표시하거나 제거한다. 한쪽만 처리하면 두 문서의 상태가 어긋난다. 작업 시작 시 이 절과 WORKFLOW_IMPROVEMENT.md §7을 함께 열고, 처리할 항목을 양쪽에서 동시에 체크한다.
 
-### 7-8. students.name 컬럼 제거 및 실명 DB 저장 현안 — 설계 목표와 실제 스키마 불일치
+### 7-8. students.name 컬럼 제거 및 실명 DB 저장 현안 ✅ 완료 (2026-11-07)
 
-- **현상:** STUDENT_PRIVACY_ARCHITECTURE.md §1.1 및 §2.1은 "서버 DB에서 학생 실명을 제거했다"는 취지로 기술되어 있으나, 실제 코드 및 스키마에는 `students.name` 컬럼이 여전히 존재한다.
-- **코드/스키마상 확인 사항:**
-  - `app/db 스키마.sql` §114: `students` 테이블 정의에 `name varchar(50) NOT NULL` 포함.
-  - `dev/db_clean_reset.sql` §96: 동일한 `name varchar(50) NOT NULL` 명시 (최신 스키마 소스).
-  - `app/includes/common/db_migration.php` §206–§211: `students.name`을 NULL 허용으로 완화하는 ALTER만 시도. 컬럼 삭제는 없음. 이 코드는 기존 데이터를 보호하기 위한 목적으로 작성되었으나, 현재 `db_clean_reset.sql`로 데이터를 초기화하는 상황에서는 전제(데이터 보호 필요)가 유효하지 않다.
-  - `app/views/input/bulk.php` §48–§59: `SELECT id, name FROM students WHERE class_id = :class_id AND is_active = 1`로 실명을 DB에서 직접 조회하여 화면에 사용.
-  - `app/includes/common/db_migration.php` §175–§191: `student_hash` 컬럼 생성 시 기존 `name`을 사용해 해시를 역생성하는 로직 존재. 컬럼 삭제 시 이 로직도 함께 처리 필요.
-- **설계 원칙과의 관계:** §2.1의 SSOT 원칙 및 Zero PII 원칙에 따르면, 실명은 구글 시트에만 존재하고 서버 DB에는 `student_hash`만 있어야 한다. 현재 상태는 이 원칙을 완전히 충족하지 않는다.
-- **이관을 위한 방향 (미정 — 실제 진행 시 결정):**
-  1. `app/db 스키마.sql` 및 `dev/db_clean_reset.sql`에서 `students.name` 컬럼 정의 제거. (데이터가 리셋된 현재 시점에서는 컬럼 삭제가 안전함.)
-  2. `db_migration.php`의 `ensurePhase3PrivacySchema()`에서 `name` NULL 허용 완화 코드(§206–§211) 제거. (`name` 컬럼 자체가 없어지므로.)
-  3. `db_migration.php` §175–§191의 `name` 기반 `student_hash` 역생성 로직 검토 — 컬럼 삭제 시 이 로직이 실행되지 않도록 하거나, 컬럼 삭제 전에 필요한 경우 한 번만 실행하고 제거.
-  4. `students.name`을 직접 조회하는 모든 코드(`bulk.php` §48–§59 등)를 찾아, 실명 표시를 구글 시트에서 불러온 세션 기반 값으로 대체. 화면 표시용 실명은 구글 시트(SSOT)에서 읽어와 세션/메모리에서 활용하고, 서버 DB 조회·저장은 `student_hash`로만 제한.
-- **관련:** `views/input/bulk.php`의 실명 처리는 §7-4(구글 시트 명단 열 매핑) 및 §8 향후 과제와 연계됨.
+- **현상(과거):** STUDENT_PRIVACY_ARCHITECTURE.md §1.1 및 §2.1이 작성되던 시점에는 `students.name` 컬럼이 DB 스키마에 존재했고, `views/input/bulk.php`가 `SELECT id, name FROM students`로 실명을 DB에서 직접 조회했다.
+- **현재 상태: name 컬럼 제거 완료**
+  - `students` 테이블: 현행 스키마에 `name` 컬럼 없음. 구 스키마 파일(`app/db 스키마.sql`, `dev/db_clean_reset.sql`)도 2026-11-07에 삭제됨.
+  - `views/input/bulk.php`: 현재는 `SELECT id, student_hash FROM students WHERE class_id = :class_id AND is_active = 1`만 조회하여 실명 DB 직접 조회 없음.
+  - `db_migration.php` §206–§211(`name` NULL 허용 완화) 및 §175–§191(`name` 기반 `student_hash` 역생성)은 `name` 컬럼이 존재하지 않으므로 실행되지 않는 dead code. 추후 정리 가능.
+- **설계 원칙과의 관계:** §2.1의 SSOT 원칙 및 Zero PII 원칙에서 요구한 "서버 DB에 실명 컬럼 없음"은 **현재 충족됨**. `students.name`을 직접 조회하는 코드는 모두 청산 완료.
+
+- **청산 완료 항목:**
+  1. `students.name` 컬럼 정의 제거 → **완료** (현행 스키마에 name 없음, 구 스키마 파일도 삭제됨).
+  2. `students.name`을 직접 조회하는 코드 청산 → **완료** — `bulk.php`는 `SELECT id, student_hash FROM students`로 전환, `restore_sheet.php`는 `makeStudentHash($classSalt, $studentName)`으로 `student_hash` 계산 후 `WHERE student_hash = :hash` 조회로 전환, `roi_inspector.php`는 삭제 완료.
+  3. `db_migration.php` §206–§211 `name` NULL 허용 완화 코드 → **잔여** (dead code, 추후 정리).
+  4. `db_migration.php` §175–§191 `name` 기반 `student_hash` 역생성 로직 → **잔여** (dead code, 추후 정리).
+
+- **관련:** `restore_sheet.php`의 name→student_hash 전환은 본 항목에서 완료 처리됨. google_drive_helper.php 및 구글 시트에서 student_hash를 참조할 필요 없이, 구글 시트의 `student_name`과 `classes.class_salt`로 `makeStudentHash()` 계산 후 DB 조회하는 방식이 채택됨.
