@@ -28,7 +28,7 @@
 | **API 엔드포인트** | 루트 경로 혼재 (`api/create_classes.php` 등) | `api/{auth,classes,grading,student,templates,google}/` 체계화 | JSON 응답 규격 통일 |
 | **UI 화면 (Views)** | 루트 및 template/ 에 혼재 | `views/{auth,dashboard,grading,input,student,templates}/` 분리 | 역할별 뷰 명확화 |
 | **정적 자산 / 업로드** | 루트 상대경로 참조 | `public/assets/`, `public/uploads/{originals,crops}/` 정리 | 웹 접근 및 보안 격리 |
-| **레거시 잔재** | 루트 `grading/` 폴더 | 하위 호환용 2줄짜리 프록시 파일(`get_results.php` 등)만 남음 | 신규 코드는 `views/grading/` 및 `api/grading/` 사용 |
+| **레거시 잔재** | 루트 `grading/` 폴더 | 2026-11-05 제거 완료. 하위 호환 프록시 폴더 전체가 삭제됨 (`objective.php`, `get_results.php`, `grading_review.php`, `NanumGothic.ttf`). 신규 코드는 `views/grading/` 및 `api/grading/`와 `includes/grading/objective.php`만 사용. | Ф삭제 완료. 실제 호출 경로 없음. `NanumGothic.ttf`도 `public/assets/fonts/`로 단일화됨 |
 
 ---
 

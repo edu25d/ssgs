@@ -147,23 +147,24 @@ STUDENT_PRIVACY_ARCHITECTURE.md의 Phase 1~3은 HANDOFF.md 기준 전체 완료 
 
 현재 코드베이스에서 발견되었으나 아직 결론을 내리지 않은 문제다. 해당 과제를 처리할 때 아래 항목을 함께 검토한다.
 
-### 8-1. `app/grading/` vs `app/includes/grading/objective.php` 중복 정리
+### 8-1. `app/grading/` vs `app/includes/grading/objective.php` 중복 정리 ✅ 완료 (2026-11-05)
 
-- **현상**: 채점 관련 PHP 파일이 두 곳에 나뉘어 있다.
-  - `app/grading/objective.php`
-  - `app/grading/get_results.php`
-  - `app/grading/grading_review.php`
-  - `app/grading/NanumGothic.ttf`
-  - `app/includes/grading/objective.php` (별도 존재)
-- **PROJECT_GUIDE_SSOT.md 기술과의 불일치**: 동 문서 §4 I/O 일람표는 `includes/grading/objective.php`를 채점 모듈로 기술하고 있으나, 실제 `app/grading/objective.php`가 별도로 존재한다. 어느 파일이 실제 채점을 담당하는지 확인이 필요하다.
-- **`roi_inspector.php` 상태**: `리팩토링-ssot.md`(삭제됨)의 이행 표에서 "제거 대상"으로 언급된 파일이다. **2026-11-07에 삭제 완료** — `app/views/grading/roi_inspector.php`(원본)와 `app/grading/roi_inspector.php`(하위 호환 프록시)가 모두 삭제되었다. 원본은 로컬 점검용 개발 파일, 프록시는 원본 삭제 후 단독 의미가 없어져 함께 삭제.
-- **`NanumGothic.ttf` 위치**: 폰트 파일이 `app/grading/` 아래에 있다. `app/public/assets/fonts/`로 옮기는 것이 폴더 용도에 부합할 수 있다.
-
-**처리 방향 (미정)**:
-1. `app/grading/objective.php`와 `app/includes/grading/objective.php` 중 실제 채점을 담당하는 파일을 확인.
-2. 중복이라면 한쪽으로 일원화하거나, 양쪽이 각각 다른 역할을 한다면 그 차이를 문서에 명시.
-3. **`roi_inspector.php`**: 삭제 완료. 추가 조치 불필요.
-4. `NanumGothic.ttf`의 위치를 `public/assets/fonts/`로 이동할지 검토.
+- **현상(이전)**: 채점 관련 파일이 `app/grading/`와 `app/includes/` 양쪽에 나뉘어 있었다.
+  - `app/grading/objective.php` — 하위 호환 래퍼 (실제 로직 없음, `includes/grading/objective.php`로 포워딩)
+  - `app/grading/get_results.php` — 하위 호환 래퍼 (`api/grading/get_results.php`로 포워딩)
+  - `app/grading/grading_review.php` — 하위 호환 프록시 (`views/grading/review.php`로 포워딩)
+  - `app/grading/NanumGothic.ttf` — 중복 폰트 (실제 사용처는 `public/assets/fonts/NanumGothic.ttf`)
+  - `app/includes/grading/objective.php` — 실제 채점 모듈 (464줄, Gemini API 기반 객관식 OMR 크롭 합성 및 자동 채점)
+- **확인 결과**:
+  - 실제 호출자는 모두 `app/includes/grading/objective.php`, `app/api/grading/get_results.php`, `app/views/grading/review.php`를 직접 참조. `app/grading/` 아래 파일을 직접 `require`/`include`하는 호출 경로 없음.
+  - `app/grading/` 폴더는 과거 경로를 유지하기 위한 래퍼/프록시 모음으로만 남아 있었고, 실제 동작에는 관여하지 않음.
+  - 폰트도 `public/assets/fonts/NanumGothic.ttf`로 이미 단일화되어 있었고, `includes/grading/objective.php`도 해당 경로를 우선 사용.
+- **처리 결과 (2026-11-05)**:
+  1. `app/grading/` 폴더 전체 삭제 (`objective.php`, `get_results.php`, `grading_review.php`, `NanumGothic.ttf`).
+  2. 실제 채점 담당 파일은 `app/includes/grading/objective.php`로 확정. `PROJECT_GUIDE_SSOT.md` §4 I/O 일람표와 일치함.
+  3. `NanumGothic.ttf`는 `public/assets/fonts/`로 이미 존재했으므로 추가 이동 불필요.
+  4. `app/grading/` 폴더 자체가 제거되어 폴더 용도 불일치도 해소.
+- **문서 대응**: `PROJECT_GUIDE_SSOT.md` §2 레거시 잔재 행 갱신, 본 절 완료 처리.
 
 ### 8-2. `.v1104/` 폴더 정리 (선택)
 
