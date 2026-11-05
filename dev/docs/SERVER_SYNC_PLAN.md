@@ -78,6 +78,12 @@
 ## 4. ftp 접속 방식
 
 - **도구:** Python `ftplib` (PHP curl 확장 미지원, Git Bash `curl`/`ftp` 명령어는 비밀번호 `!` 문자로 불안정)
+- **Windows 실행 방식:** 이 환경에서는 `python`/`python3`가 PATH에 없으므로, Python 실행 파일을 직접 지정한다.
+  - 실제 실행 파일 경로: `C:\Users\USER\AppData\Local\Python\pythoncore-3.14-64\python.exe`
+  - 시작 메뉴 바로가기(`Python 3.14.lnk`)의 대상도 같은 실행 파일을 가리킨다.
+  - 예: `"C:\Users\USER\AppData\Local\Python\pythoncore-3.14-64\python.exe" dev/ftp_sync.py`
+  - 또는 터미널에서 위 경로로 만든 alias/링크를 사용한다.
+- **프로토콜:** 평문 FTP (포트 21). 서버가 `AUTH SSL`/`AUTH TLS` 미지원 (`500 AUTH 이해 불가`)
 - **프로토콜:** 평문 FTP (포트 21). 서버가 `AUTH SSL`/`AUTH TLS` 미지원 (`500 AUTH 이해 불가`)
 - **비밀번호 입력 (표준 방식):**
   - 대화 기록에 남지 않도록 **터미널에서 직접 입력**한다.
@@ -228,6 +234,29 @@ ftp.quit()
   - 비밀번호는 터미널에서 getpass로 입력받아 대화 기록에 남지 않도록 처리
 
 ---
+
+---
+
+## 10. FTP 업로드 성공 방법 (2026-11-05)
+
+- **상황:** 이 환경에서는 `python`/`python3`가 PATH에 없어 터미널에서 바로 실행할 수 없음
+- **실행 파일:** `C:\Users\USER\AppData\Local\Python\pythoncore-3.14-64\python.exe`
+  - 시작 메뉴 바로가기 `Python 3.14.lnk`의 대상도 이 실행 파일
+- **실행 명령 (PowerShell):**
+  - `powershell -NoProfile -Command "& 'C:\Users\USER\AppData\Local\Python\pythoncore-3.14-64\python.exe' dev/ftp_sync.py"`
+  - 또는 실행 파일 경로를 직접 지정한 뒤 `dev/ftp_sync.py`를 인자로 전달
+- **비밀번호 입력 방식:**
+  - 스크립트 실행 시 `getpass.getpass()` 프롬프트가 터미널에 뜸
+  - 대화 기록에 남지 않도록 터미널에서 직접 비밀번호 입력 후 Enter
+  - Bash 인라인 전달은 비밀번호 `!` 문자 오해석 위험이 있으므로 사용하지 않음
+- **실행 결과 (2026-11-05):**
+  - 업로드 완료: 85개 파일
+  - 제외: 3개 파일/폴더 (`.env`, `public/uploads/`, `template/images/`)
+  - 오류: 없음
+  - 서버 접속: 로그인 성공, `/html` 이동 성공
+- **참고:**
+  - 콘솔 인코딩(cp949)로 한글 출력이 일부 깨질 수 있으나, 결과 판단은 로직 성공 여부로 함
+  - 같은 명령을 다시 실행할 때는 위 실행 파일 경로를 그대로 사용
 
 *문서 생성: 2026-11-05  
 최초 동기화 완료: 2026-02-28*
