@@ -43,13 +43,15 @@ function mergeGradingResults($objResults, $subjCrops) {
     }
     if (is_array($subjCrops)) {
         foreach ($subjCrops as $item) {
+            // QUESTION TYPE SYSTEM 기준: 등록/editor type을 그대로 유지한다.
+            $mergedType = $item['type'] ?? 'subjective';
             $merged[] = [
                 'item_id'      => $item['item_id'] ?? $item['id'] ?? 0,
                 'id'           => $item['id'] ?? $item['item_id'] ?? 0,
                 'display_num'  => $item['display_num'] ?? (string)($item['item_id'] ?? $item['id'] ?? 0),
                 'sub_id'       => $item['sub_id'] ?? null,
                 'page'         => (int)($item['page'] ?? 1),
-                'type'         => 'subjective',
+                'type'         => $mergedType,
                 'score'        => $item['score'] ?? $item['max_score'] ?? 0,
                 'currentScore' => $item['currentScore'] ?? 0,
                 'status'       => -1, 
@@ -203,8 +205,8 @@ try {
             continue;
         }
 
-        $objectiveItems = [];
-        $subjectiveItems = [];
+        $teacherReviewItems = [];
+        $aiGradingItems = [];
 
         // 크롭 진행 루프 (문항별 소속 페이지 라우팅 크롭)
         foreach ($roiList as $idx => $roi) {
@@ -255,90 +257,22 @@ try {
             $cropUrl = '/public/uploads/crops/' . $assignmentId . '/' . $fileName;
             $itemOriginalUrl = $pageOriginalUrls[$targetPage] ?? ($pageOriginalUrls[1] ?? reset($pageOriginalUrls));
 
+            // QUESTION TYPE SYSTEM 기준: 등록/editor type을 그대로 사용한다.
+            // bind 후 type을 채점 단계도 그대로 사용한다.
+            // 주관적 답변(subjective)만 교사 판정 대상으로 보내고, 나머지는 AI 판독 대상이다.
+            // matching_line은 Gemini 매칭 분석 대상으로 AI 판독 처리한다.
             $type = strtolower($roi['type'] ?? 'objective');
-            $isComposite = ($type === 'composite');
-            $isSubj = in_array($type, ['subjective', 'essay', 'short', 'text', '주관식']) || ($type === 'sub_item' && ($roi['sub_type'] ?? '') === 'subjective');
+            $isTeacherReview = ($type === 'subjective')
+                || ($type === 'sub_item' && in_array($roi['sub_type'] ?? '', ['subjective'], true));
 
-            if ($isComposite && !empty($roi['ans_rois']) && is_array($roi['ans_rois']) && count($roi['ans_rois']) >= 2) {
-                // ===== 복합 다답형 전용 처리: 복수 ans_rois 각각 크롭 후 하나의 묶음으로 전달 =====
-                $compositeSubCrops = [];
-                foreach ($roi['ans_rois'] as $arIdx => $ar) {
-                    if (!isset($ar['x'], $ar['y'], $ar['w'], $ar['h'])) continue;
-
-                    $arW = $ar['w'] * $scaleX;
-                    $arH = $ar['h'] * $scaleY;
-                    $arCx = ($ar['x'] * $scaleX) + ($arW / 2);
-                    $arCy = ($ar['y'] * $scaleY) + ($arH / 2);
-                    $arNewW = $arW * 1.15;
-                    $arNewH = $arH * 1.15;
-                    $arNewX = max(0, min($arCx - ($arNewW / 2), $imgW - 10));
-                    $arNewY = max(0, min($arCy - ($arNewH / 2), $imgH - 10));
-                    $arNewW = max(10, min($arNewW, $imgW - $arNewX));
-                    $arNewH = max(10, min($arNewH, $imgH - $arNewY));
-
-                    $arCropRes = @imagecrop($srcImage, ['x' => (int)$arNewX, 'y' => (int)$arNewY, 'width' => (int)$arNewW, 'height' => (int)$arNewH]);
-                    if ($arCropRes === false) $arCropRes = imagecreatetruecolor(10, 10);
-                    $compositeSubCrops[] = $arCropRes;
-                }
-
-                // 복합 크롭들을 하나의 composite objectiveItem으로 등록 (image_res_arr로 전달)
-                $safeItemKey = str_replace(['-', ' '], ['_', ''], $itemId);
-                
-                // 복합 다답형 대표 이미지: 모든 서브 크롭을 가로로 나란히 합성하여 하나의 이미지로 저장
-                $repFileName = sprintf("student_%d_item_%s_p%d_%s.jpg", $studentId, $safeItemKey, $targetPage, uniqid());
-                $repSavePath = $uploadDir . '/' . $repFileName;
-                
-                if (!empty($compositeSubCrops)) {
-                    $pad = 6;
-                    $combinedW = array_sum(array_map('imagesx', $compositeSubCrops)) + ($pad * (count($compositeSubCrops) + 1));
-                    $maxH = max(array_map('imagesy', $compositeSubCrops));
-                    $combinedH = $maxH + ($pad * 2);
-
-                    $combinedRes = imagecreatetruecolor($combinedW, $combinedH);
-                    $bgCol = imagecolorallocate($combinedRes, 248, 250, 252);
-                    imagefill($combinedRes, 0, 0, $bgCol);
-                    $borderCol = imagecolorallocate($combinedRes, 203, 213, 225);
-
-                    $curX = $pad;
-                    foreach ($compositeSubCrops as $ci => $subCr) {
-                        $sW = imagesx($subCr);
-                        $sH = imagesy($subCr);
-                        imagecopy($combinedRes, $subCr, $curX, $pad, 0, 0, $sW, $sH);
-                        // 서브 크롭 외곽선
-                        imagerectangle($combinedRes, $curX - 1, $pad - 1, $curX + $sW, $pad + $sH, $borderCol);
-                        $curX += $sW + $pad;
-                    }
-                    imagejpeg($combinedRes, $repSavePath, 85);
-                    imagedestroy($combinedRes);
-                }
-                
-                $cropUrl = '/public/uploads/crops/' . $assignmentId . '/' . $repFileName;
-                $itemOriginalUrl = $pageOriginalUrls[$targetPage] ?? ($pageOriginalUrls[1] ?? reset($pageOriginalUrls));
-
-                $objectiveItems[] = [
+            if ($isTeacherReview) {
+                $teacherReviewItems[] = [
                     'id'             => $itemId,
                     'item_id'        => $itemId,
                     'display_num'    => $displayNum,
                     'sub_id'         => $subId,
                     'page'           => $targetPage,
-                    'score'          => $roi['score'] ?? 0,
-                    'answer'         => $roi['answer'] ?? '',
-                    'attribute'      => getAttributeFromAnswer($roi['answer'] ?? ''),
-                    'type'           => 'composite',
-                    'image_res'      => $compositeSubCrops[0] ?? imagecreatetruecolor(10, 10),
-                    'image_res_arr'  => $compositeSubCrops, // composite 전용: 복수 크롭 배열
-                    'is_composite'   => true,
-                    'crop_url'       => $cropUrl,
-                    'crop_image_url' => $cropUrl,
-                    'image_path'     => $itemOriginalUrl
-                ];
-            } elseif ($isSubj) {
-                $subjectiveItems[] = [
-                    'id'             => $itemId,
-                    'item_id'        => $itemId,
-                    'display_num'    => $displayNum,
-                    'sub_id'         => $subId,
-                    'page'           => $targetPage,
+                    'type'           => $type,
                     'score'          => $roi['score'] ?? 0,
                     'answer'         => $roi['answer'] ?? '',
                     'crop_url'       => $cropUrl,
@@ -347,12 +281,13 @@ try {
                 ];
                 imagedestroy($cropRes);
             } else {
-                $objectiveItems[] = [
+                $aiGradingItems[] = [
                     'id'             => $itemId,
                     'item_id'        => $itemId,
                     'display_num'    => $displayNum,
                     'sub_id'         => $subId,
                     'page'           => $targetPage,
+                    'type'           => $type,
                     'score'          => $roi['score'] ?? 0,
                     'answer'         => $roi['answer'] ?? '',
                     'attribute'      => getAttributeFromAnswer($roi['answer'] ?? ''),
@@ -372,13 +307,15 @@ try {
         }
 
         // 4단계: 초기 제출 레코드 생성 (비동기 낙관적 UI를 위해 먼저 안전 저장)
-        $initialObjectiveItems = [];
-        foreach ($objectiveItems as $oi) {
+        // QUESTION TYPE SYSTEM 기준: 등록/editor type을 그대로 운반한다.
+        // 교사 판정 대상은 AI 판독 대상이 아니므로 aiGradingItems에 넣지 않는다.
+        $initialAiGradingItems = [];
+        foreach ($aiGradingItems as $oi) {
             $initialObjectiveItems[] = [
                 'item_id'        => $oi['id'],
                 'id'             => $oi['id'],
                 'page'           => $oi['page'] ?? 1,
-                'type'           => 'objective',
+                'type'           => $oi['type'] ?? 'objective',
                 'score'          => $oi['score'] ?? 0,
                 'currentScore'   => 0,
                 'status'         => -1,
@@ -391,7 +328,7 @@ try {
         }
 
         $primaryOriginalUrl = $pageOriginalUrls[1] ?? (reset($pageOriginalUrls) ?: '');
-        $initialRawResults = mergeGradingResults($initialObjectiveItems, $subjectiveItems);
+        $initialRawResults = mergeGradingResults($initialAiGradingItems, $teacherReviewItems);
         foreach ($initialRawResults as &$rItem) {
             if (empty($rItem['image_path'])) {
                 $rItem['image_path'] = $primaryOriginalUrl;
@@ -399,7 +336,7 @@ try {
         }
         unset($rItem);
 
-        $hasSubjective = !empty($subjectiveItems);
+        $hasTeacherReviewItems = !empty($teacherReviewItems);
         $initialJsonPayload = json_encode($initialRawResults, JSON_UNESCAPED_UNICODE);
 
         $stmtChk = $pdo->prepare("SELECT id FROM exam_results WHERE assignment_id = ? AND student_id = ?");
@@ -425,11 +362,11 @@ try {
 
         $tasks[] = [
             'record_id'               => $recordId,
-            'objective_items'         => $objectiveItems,
-            'subjective_items'        => $subjectiveItems,
-            'initial_objective_items' => $initialObjectiveItems,
-            'has_subjective'          => $hasSubjective,
-            'local_original_url'      => $primaryOriginalUrl
+            'ai_grading_items'         => $aiGradingItems,
+            'teacher_review_items'     => $teacherReviewItems,
+            'initial_ai_grading_items' => $initialAiGradingItems,
+            'has_teacher_review_items' => $hasTeacherReviewItems,
+            'local_original_url'       => $primaryOriginalUrl
         ];
     }
 
@@ -462,31 +399,31 @@ try {
         fastcgi_finish_request();
     }
 
-    // 5단계: Gemini AI 객관식 채점 수행 (FastCGI 환경이면 백그라운드, 아니면 동기 수행)
+    // 5단계: Gemini AI 판독 대상 채점 수행 (FastCGI 환경이면 백그라운드, 아니면 동기 수행)
     foreach ($tasks as $taskIdx => $task) {
         if ($taskIdx > 0) {
             // Google API Rate Limit 방지를 위한 0.5초 안전 딜레이
             usleep(500000);
         }
 
-        $recordId              = $task['record_id'];
-        $objectiveItems        = $task['objective_items'];
-        $subjectiveItems       = $task['subjective_items'];
-        $initialObjectiveItems = $task['initial_objective_items'];
-        $hasSubjective         = $task['has_subjective'];
-        $localOriginalUrl      = $task['local_original_url'];
+        $recordId                = $task['record_id'];
+        $aiGradingItems          = $task['ai_grading_items'];
+        $teacherReviewItems      = $task['teacher_review_items'];
+        $initialAiGradingItems   = $task['initial_ai_grading_items'];
+        $hasTeacherReviewItems   = $task['has_teacher_review_items'];
+        $localOriginalUrl        = $task['local_original_url'];
 
-        $objectiveResults = gradeObjectiveItems($objectiveItems);
+        $aiGradingResults = gradeObjectiveItems($aiGradingItems);
 
-        if (!empty($objectiveResults['debug']['error'])) {
-            @file_put_contents(APP_ROOT . '/gemini_debug.log', date('Y-m-d H:i:s') . ' [Objective Error] ' . json_encode($objectiveResults['debug'], JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND);
+        if (!empty($aiGradingResults['debug']['error'])) {
+            @file_put_contents(APP_ROOT . '/gemini_debug.log', date('Y-m-d H:i:s') . ' [Objective Error] ' . json_encode($aiGradingResults['debug'], JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND);
         }
 
-        foreach ($objectiveItems as $oi) {
+        foreach ($aiGradingItems as $oi) {
             if (!empty($oi['image_res']) && (is_resource($oi['image_res']) || is_object($oi['image_res']))) {
                 @imagedestroy($oi['image_res']);
             }
-            // composite 전용: 복수 크롭 배열 해제
+            // 복합 다답형 전용: 복수 크롭 배열 해제
             if (!empty($oi['image_res_arr']) && is_array($oi['image_res_arr'])) {
                 foreach ($oi['image_res_arr'] as $subCrop) {
                     if ($subCrop && (is_resource($subCrop) || is_object($subCrop))) {
@@ -496,12 +433,12 @@ try {
             }
         }
 
-        $actualObjectiveItems = $objectiveResults['items'] ?? [];
-        if (empty($actualObjectiveItems) && !empty($objectiveItems)) {
-            $actualObjectiveItems = $initialObjectiveItems;
+        $actualAiGradingItems = $aiGradingResults['items'] ?? [];
+        if (empty($actualAiGradingItems) && !empty($aiGradingItems)) {
+            $actualAiGradingItems = $initialAiGradingItems;
         }
 
-        $finalRawResults = mergeGradingResults($actualObjectiveItems, $subjectiveItems);
+        $finalRawResults = mergeGradingResults($actualAiGradingItems, $teacherReviewItems);
         $finalTotalScore = array_reduce($finalRawResults, function($acc, $item) {
             return $acc + (float)($item['currentScore'] ?? 0);
         }, 0);
@@ -513,7 +450,7 @@ try {
         }
         unset($rItem);
 
-        $isReviewed = $hasSubjective ? 0 : 1;
+        $isReviewed = $hasTeacherReviewItems ? 0 : 1;
         $finalJsonPayload = json_encode($finalRawResults, JSON_UNESCAPED_UNICODE);
 
         // 채점 완료 결과로 DB 즉각 업데이트

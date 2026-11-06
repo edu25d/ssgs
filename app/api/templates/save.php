@@ -38,8 +38,10 @@ foreach ($roiData as $idx => $item) {
         $item['page_uid'] = 'p_' . $item['page'];
     }
     // Phase 3 확장 필드 무결성 보장
+    // 등록/editor에서 결정된 type을 그대로 유지한다. 비어 있을 때만 Type System 기준 기본값으로 채운다.
+    // sub_type은 소문항 구성/구분 등 보조 정보에만 사용하며, type과 동일하게 채우지 않는다.
     $item['type'] = (string)($item['type'] ?? 'objective');
-    $item['sub_type'] = (string)($item['sub_type'] ?? $item['type']);
+    $item['sub_type'] = isset($item['sub_type']) ? (string)$item['sub_type'] : null;
     $item['answer'] = (string)($item['answer'] ?? '');
     $item['score'] = (int)($item['score'] ?? 0);
     $item['has_partial_score'] = (bool)($item['has_partial_score'] ?? false);

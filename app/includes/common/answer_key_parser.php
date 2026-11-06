@@ -341,7 +341,7 @@ if (!function_exists('normalizeAnswerEntry')) {
                 'raw_answer'           => $rawAnswerTrim,
                 'normalized_answer'    => $descAnswer,
                 'type'                 => 'subjective',
-                'sub_type'             => 'subjective',
+                'sub_type'             => null,
                 'score'                => $score,
                 'criteria'             => $criteria,
                 'is_sub_item'          => false,
@@ -525,8 +525,8 @@ if (!function_exists('normalizeAnswerEntry')) {
             'q_num'                => $qNum,
             'raw_answer'           => $rawAnswerTrim,
             'normalized_answer'    => $rawAnswerTrim,
-            'type'                 => 'short_ox',
-            'sub_type'             => 'subjective',
+            'type'                 => 'short_answer',
+            'sub_type'             => null,
             'score'                => $score,
             'criteria'             => $criteria,
             'is_sub_item'          => false,
@@ -578,7 +578,7 @@ if (!function_exists('buildSubItemEntry')) {
             'raw_answer'           => $rawAnswer,
             'normalized_answer'    => $rawAnswer,
             'type'                 => $type,
-            'sub_type'             => ($type === 'matching_line') ? 'objective' : 'subjective',
+            'sub_type'             => null,
             'score'                => $score,
             'criteria'             => $criteria,
             'is_sub_item'          => true,
@@ -676,20 +676,19 @@ if (!function_exists('bindAnswerKeyToRois')) {
 
                 if ($ansInfo['type'] === 'matching_line') {
                     $r['type'] = 'matching_line';
-                    $r['sub_type'] = 'matching_line';
+                    $r['sub_type'] = null;
                     if (!empty($ansInfo['pairs'])) {
                         $r['pairs'] = $ansInfo['pairs'];
                     }
                 } elseif ($ansInfo['type'] === 'subjective') {
-                    $isEssay = !empty($ansInfo['criteria']) || mb_strlen($ansInfo['normalized_answer']) > 15;
-                    $r['type'] = $isEssay ? 'essay' : 'short_answer';
-                    $r['sub_type'] = $isEssay ? 'essay' : 'subjective';
+                    $r['type'] = 'subjective';
+                    $r['sub_type'] = null;
                 } elseif ($ansInfo['type'] === 'short_ox') {
                     $r['type'] = 'short_answer';
-                    $r['sub_type'] = 'short_ox';
+                    $r['sub_type'] = null;
                 } elseif ($ansInfo['type'] === 'objective') {
                     $r['type'] = 'objective';
-                    $r['sub_type'] = 'objective';
+                    $r['sub_type'] = null;
                 }
             }
 

@@ -672,13 +672,16 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
             if (isPartialMode && index === currentRowIndex) tr.classList.add('partial-mode');
 
             const firstColText = (viewMode === 'question') ? row.studentName : `${row.item_id}번`;
-            const typeLabel = row.type === 'composite'
-                ? '<span style="color:#c2410c; font-weight:700;">[복합다답]</span>'
-                : (row.type === 'subjective'
-                    ? '<span style="color:#b45309; font-weight:700;">[주관식]</span>'
-                    : (row.type === 'sub_item'
-                        ? '<span style="color:#7c3aed; font-weight:700;">[소문항]</span>'
-                        : '<span style="color:#0d6efd; font-weight:700;">[객관식]</span>'));
+            const isSubjective = (row.type === 'subjective');
+            const typeLabel = isSubjective
+                ? '<span style="color:#b45309; font-weight:700;">[주관식]</span>'
+                : (row.type === 'sub_item'
+                    ? '<span style="color:#7c3aed; font-weight:700;">[소문항]</span>'
+                    : (row.type === 'short_answer'
+                        ? '<span style="color:#0d6efd; font-weight:700;">[단답형]</span>'
+                        : (row.type === 'matching_line'
+                            ? '<span style="color:#0d6efd; font-weight:700;">[선잇기]</span>'
+                            : '<span style="color:#0d6efd; font-weight:700;">[객관식]</span>')));
 
             let statusBadge = '';
             if (row.status === 'correct') {
@@ -701,7 +704,7 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
             }
 
             let extractedAnswerHtml = '';
-            if (row.type !== 'subjective') {
+            if (row.type !== 'subjective' && row.type !== 'essay') {
                 if (row.isAiPending) {
                     extractedAnswerHtml = `<div class="extracted-answer"><span style="color:#2563eb; font-weight:700;">🤖 AI 판독 진행 중... ⏳</span></div>`;
                 } else {
@@ -717,9 +720,9 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
             };
 
             let compositeSelectorHtml = '';
-            if (row.type === 'composite') {
-                const subAnsParts = (row.answer || '').split(/[,/]/).map(s => s.trim()).filter(Boolean);
-                const subCount = subAnsParts.length > 1 ? subAnsParts.length : 2;
+            const subAnsParts = (row.answer || '').split(/[,/]/).map(s => s.trim()).filter(Boolean);
+            if (subAnsParts.length > 1) {
+                const subCount = subAnsParts.length;
                 row.subCount = subCount;
                 if (row.activeSubIndex === undefined) row.activeSubIndex = 0;
 
@@ -801,7 +804,7 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
         if (currentRowIndex < 0 || displayRows.length === 0) return;
         const row = displayRows[currentRowIndex];
 
-        if (e.key === 'Tab' && row && row.type === 'composite') {
+        if (e.key === 'Tab' && row && row.subCount > 1) {
             e.preventDefault();
             const count = row.subCount || 2;
             row.activeSubIndex = ((row.activeSubIndex || 0) + 1) % count;

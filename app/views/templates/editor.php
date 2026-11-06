@@ -3043,45 +3043,11 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
         // 4대 문항 표준 유형 매핑 (하위 호환 지원)
 
         function getDisplayType(r) {
-
             if (!r) return 'objective';
-
-            if (r.type === 'matching_line') return 'matching_line';
-
-            if (r.type === 'essay') return 'essay';
-
-            if (r.type === 'short_answer') return 'short_answer';
-
-            if (r.type === 'objective') return 'objective';
-
-
-
-            if (r.type === 'subjective') {
-
-                const isLong = (r.criteria && r.criteria.length > 0) || (r.answer && r.answer.length > 15);
-
-                return isLong ? 'essay' : 'short_answer';
-
-            }
-
-            if (r.type === 'sub_item') {
-
-                if (r.sub_type === 'matching_line') return 'matching_line';
-
-                if (r.sub_type === 'objective') return 'objective';
-
-                return 'short_answer';
-
-            }
-
-            if (r.type === 'composite') {
-
-                return 'short_answer';
-
-            }
-
-            return 'objective';
-
+            // QUESTION TYPE SYSTEM 기준: type을 재변환하지 않고 그대로 표시한다.
+            // 단답형/주관식 type 통일(short_answer/subjective) 이후이므로
+            // type 값을 그대로 노출한다.
+            return r.type || 'objective';
         }
 
 
@@ -4126,7 +4092,7 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
                 // 답안 영역이 1개: 4대 유형 순환 (객관식 ➔ 단답/OX ➔ 선잇기 ➔ 서술형)
 
-                const order = ['objective', 'short_answer', 'matching_line', 'essay'];
+                const order = ['objective', 'short_answer', 'matching_line', 'subjective'];
 
                 const curType = getDisplayType(item);
 
@@ -4724,7 +4690,7 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
 
 
-            const isSingleTarget = ['objective', 'short_answer', 'matching_line', 'essay', 'subjective'].includes(type);
+            const isSingleTarget = ['objective', 'short_answer', 'matching_line', 'subjective'].includes(type);
 
 
 
@@ -5890,11 +5856,11 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
                         glowColor = "#2dd4bf";
 
-                    } else if (dType === 'essay') {
+                    } else if (dType === 'subjective') {
 
-                        ansColor = "#7c3aed"; // 서술형: Purple
+                        ansColor = "#7c3aed"; // 주관식: Purple
 
-                        typeTag = "[서술형]";
+                        typeTag = "[주관식]";
 
                         glowColor = "#a78bfa";
 
@@ -6134,7 +6100,7 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
                         <button class="type-btn ${displayType === 'matching_line' ? 'active matching' : ''}" onclick="event.stopPropagation(); setType(${idx}, 'matching_line')">선잇기</button>
 
-                        <button class="type-btn ${displayType === 'essay' ? 'active essay' : ''}" onclick="event.stopPropagation(); setType(${idx}, 'essay')">서술형</button>
+						<button class="type-btn ${displayType === 'subjective' ? 'active subj' : ''}" onclick="event.stopPropagation(); setType(${idx}, 'subjective')">주관식</button>
 
                     </div>
 
@@ -6146,7 +6112,7 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
                 let criteriaHtml = '';
 
-                if (displayType === 'essay' && r.criteria && r.criteria.trim().length > 0) {
+                if (displayType === 'subjective' && r.criteria && r.criteria.trim().length > 0) {
 
                     criteriaHtml = `
 

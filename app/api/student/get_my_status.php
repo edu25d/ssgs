@@ -91,7 +91,7 @@ try {
                 $pendingCount++;
             }
 
-            if ($type === 'subjective' || in_array($type, ['essay', 'short', 'text', '주관식'])) {
+            if ($type === 'subjective') {
                 $subjTotal++;
             } else {
                 $objTotal++;

@@ -548,15 +548,30 @@ if (!function_exists('autoAnalyzeMatchingRoisServerSide')) {
 
             $gData = $geminiRes['data'];
 
-            // Gemini 분석 결과 선잇기 문항이 아니라고 판별된 경우 (예: Q17 등 일반 기호형/서술형)
+            // Gemini 분석 결과 선잇기 문항이 아니라고 판별된 경우
+            // 선잇기(matching_line)를 제외한 유형 중에서 다시 분류한다.
             if (isset($gData['is_matching']) && !$gData['is_matching']) {
                 imagedestroy($cropImg);
                 imagedestroy($srcImg);
-                $r['type'] = !empty($r['criteria']) ? 'essay' : 'short_answer';
-                $r['sub_type'] = 'subjective';
+
+                // 기존 type/sub_type 정보를 최대한 살려 재분류하되,
+                // 주관식(subjective) / 객관식(objective) 계열로만 나눈다.
+                $prevType = $r['type'] ?? '';
+                $prevSubType = $r['sub_type'] ?? null;
+
+                if (in_array($prevType, ['subjective', 'short_answer', 'short', 'text', '주관식'])) {
+                    $r['type'] = 'subjective';
+                } elseif ($prevType === 'sub_item' && $prevSubType === 'subjective') {
+                    $r['type'] = 'sub_item';
+                } else {
+                    $r['type'] = 'objective';
+                }
+
+                $r['sub_type'] = null;
                 unset($r['matching_info']);
                 continue;
-            }            // 1. matching_box가 있으면 ans_roi를 통합 다이어그램 전체 영역으로 교체 (스케일 자동 판정 및 Strict Clamping)
+            }
+            // 1. matching_box가 있으면 ans_roi를 통합 다이어그램 전체 영역으로 교체 (스케일 자동 판정 및 Strict Clamping)
 
             if (!empty($gData['matching_box']) && isset($gData['matching_box']['ymin'])) {
 

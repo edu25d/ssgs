@@ -259,17 +259,44 @@ if (!function_exists('extractRoisFromUpstageData')) {
             }
 
             $isMatchingLineQuestion = (bool)preg_match('/선\s*으로|선\s*을\s*그어|선\s*잇기|선\s*으\s*로|연결\s*(?:하시오|해\s*보|하세요|하기)|(?:바르게|알맞게|알맞은\s*것끼리|관련\s*있는\s*것끼리)\s*(?:선\s*으로\s*)?연결|(?:바르게|알맞게|찾아)\s*(?:선\s*으로\s*)?이[으어]|이어\s*보(?:시오|세요)?|이으\s*(?:시오|세요)/u', $fullQText);
-            $hasSubjectiveKeywords = (bool)preg_match('/쓰시오|서술|설명하시오|바르게\s*고쳐|○표|○\s*표|V표|v표|체크|동그라미|단답|찾아\s*쓰|까닭|이유/u', $fullQText);
-            $isSymbolType = (bool)preg_match('/기호[를|로]|번호[를|로]|알맞은\s*기호/u', $fullQText) && !preg_match('/○표|○\s*표|V표|v표|체크|동그라미/u', $fullQText);
+            $hasSubjectiveKeywords = (bool)preg_match('/쓰시오|서술|설명하시오|바르게\s*고쳐|까닭|이유/u', $fullQText);
+
+            // 단답형 후보: 짧은 단어·숫자·O/X 기입형을 1차 유형으로 분류하기 위한 감지
+            $isShortAnswerCandidate = (bool)preg_match(
+                '/(?:단\s*어(?:를\s*)?쓰|낱\s*말(?:을\s*)?쓰|한\s*마디(?:로)?\s*쓰|짧은\s*답|숫자를\s*쓰|수를\s*쓰|한\s*단어|알맞은\s*말(?:을\s*)?쓰|'
+                . '(?:\(\s*\))?\s*(?:안에|에)\s*쓰|괄호\s*안|괄호\s*속에\s*쓰|'
+                . '(?:○[\s\x{25CB}]?\s*|✕[\s\x{2717}]?\s*|X[\s\x{2717}]?\s*|x[\s\x{2717}]?\s*)?(?:표|기|답|표시|체크|동그라미|O|X)'
+                . '|O[\s\x{25CB}]?\s*/\s*✕[\s\x{2717}]?\s*|○[\s\x{25CB}]?\s*/\s*✕[\s\x{2717}]?\s*|'
+                . '[Oo]\s*/\s*[Xx]\s*|참\s*/\s*거짓|옳은\s*/\s*그른|맞으면\s*/\s*틀리면|진위|진짜\s*/\s*가짜)/u',
+                $fullQText
+            );
+
+            // O/X형 단답형과 주관식(설명·까닭·서술)을 분리하기 위해 O/X 지표만 있는 경우 우선 단답형으로 본다.
+            $hasOxStyleOnly = (bool)preg_match(
+                '/(?:○[\s\x{25CB}]?\s*|✕[\s\x{2717}]?\s*|X[\s\x{2717}]?\s*|x[\s\x{2717}]?\s*|O[\s\x{25CB}]?\s*|체크|동그라미)[\s\x{2003}]*'
+                . '(?:표|기|답|표시|체크|O|X)/u',
+                $fullQText
+            ) && !$hasSubjectiveKeywords;
+
+            $isSymbolType = (bool)preg_match('/기호[를|로]|번호[를|로]|알맞은\s*기호/u', $fullQText) && !preg_match('/○표|○\s*표|V표|v표|체크|동그라미|u', $fullQText);
+
+            // 단답형 우선 판별: O/X 표시형, 단어/숫자 기입형이고 주관식 서술 키워드가 없으면 단답형으로 분류
+            $isShortAnswer = $isShortAnswerCandidate && !$hasSubjectiveKeywords;
 
             if ($isSymbolType) {
                 // [Q12 해결] '기호를 쓰시오', '번호를 쓰시오'는 ㉠, 1 등을 적는 선택형이므로 객관식 [객] 분류
+                $isShortAnswer = false;
+                $isSubjective = false;
+            } elseif ($isShortAnswer) {
+                // [신설] 짧은 단어·숫자·O/X 기입형은 1차 유형 단답형(short_answer)으로 분류
                 $isSubjective = false;
             } elseif ($hasSubjectiveKeywords) {
-                // [Q10 해결] '까닭을 쓰시오', '단어를 쓰시오', '○표를 하시오' 등은 주관식 [주] 분류
+                // [Q10 해결] '까닭을 쓰시오', '이유를 서술하시오' 등은 주관식 [주] 분류
+                $isShortAnswer = false;
                 $isSubjective = true;
             } else {
                 // 일반 객관식
+                $isShortAnswer = false;
                 $isSubjective = false;
             }
 
@@ -800,6 +827,9 @@ if (!function_exists('extractRoisFromUpstageData')) {
                 $subScore = (int)round($scorePerQuestion / $subCount);
                 if ($subScore <= 0) $subScore = 1;
 
+                // 소문항 답안란 단위 type은 1차 유형 기준으로 결정하고, 소문항 여부는 2차 분류로 표현
+                $subBaseType = $isMatchingLineQuestion ? 'matching_line' : ($isSubjective ? 'subjective' : ($isShortAnswer ? 'short_answer' : 'objective'));
+
                 foreach ($matchedBrackets as $subIdx => $mRoi) {
                     $subNum = $subIdx + 1;
                     $rois[] = [
@@ -810,14 +840,15 @@ if (!function_exists('extractRoisFromUpstageData')) {
                         'page_uid'    => $pInfo['page_uid'],
                         'num_roi'     => $numRoi,
                         'ans_roi'     => $mRoi,
-                        'type'        => 'sub_item',
-                        'sub_type'    => $isSubjective ? 'subjective' : 'objective',
+                        'type'        => $subBaseType,
+                        'is_sub_item' => true,
+                        'sub_type'    => $subBaseType,
                         'answer'      => '',
                         'score'       => $subScore
                     ];
                 }
             } else {
-                $qFinalType = $isMatchingLineQuestion ? 'matching_line' : ($isSubjective ? 'subjective' : 'objective');
+                $qFinalType = $isMatchingLineQuestion ? 'matching_line' : ($isSubjective ? 'subjective' : ($isShortAnswer ? 'short_answer' : 'objective'));
                 $rois[] = [
                     'id'          => $q['num'],
                     'sub_id'      => null,
