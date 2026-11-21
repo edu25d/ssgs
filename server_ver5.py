@@ -17,6 +17,7 @@ FILES = {
     "/download/apps-script-login-ver5.zip": "AppsScript_Login_Source_ver5.zip",
     "/download/student-code-ver5.gs": "AppsScript_Student_Code_ver5.gs",
     "/download/pin-setup-diagnostic-ver6.gs": "AppsScript_Student_PinSetup_Diagnostic_ver6.gs",
+    "/download/pin-setup-diagnostic-ver7.gs": "AppsScript_Student_PinSetup_Diagnostic_ver7.gs",
     "/download/student-page-ver5.html": "AppsScript_Student_Index_ver5.html",
     "/download/student-manifest-ver5.json": "AppsScript_Student_appsscript_ver5.json",
     "/download/teacher-code-ver5.gs": "AppsScript_Teacher_Code_ver5.gs",
