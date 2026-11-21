@@ -171,34 +171,6 @@ if (!function_exists('ensurePhase3PrivacySchema')) {
         } catch (Exception $e) {
             try {
                 $pdo->exec("ALTER TABLE `students` ADD COLUMN `student_hash` VARCHAR(32) NULL AFTER `class_id`");
-                
-                // 기존 데이터가 있는 경우 name을 이용해 student_hash 역생성 채우기
-                try {
-                    $hasName = false;
-                    try {
-                        $res = $pdo->query("SELECT name FROM students LIMIT 1");
-                        $hasName = (bool) $res;
-                    } catch (Exception $nameCheckEx) {
-                        // name 컬럼이 없음 -> 건너뜀
-                    }
-                    if ($hasName) {
-                        $migrStmt = $pdo->query("
-                            SELECT s.id, s.class_id, s.name, c.class_salt 
-                            FROM students s 
-                            JOIN classes c ON s.class_id = c.id 
-                            WHERE s.student_hash IS NULL OR s.student_hash = ''
-                        ");
-                        if ($migrStmt) {
-                            $upHash = $pdo->prepare("UPDATE students SET student_hash = :hash WHERE id = :id");
-                            while ($row = $migrStmt->fetch(PDO::FETCH_ASSOC)) {
-                                $h = makeStudentHash((string)$row['class_salt'], (string)$row['name']);
-                                $upHash->execute(['hash' => $h, 'id' => (int)$row['id']]);
-                            }
-                        }
-                    }
-                } catch (Exception $popEx) {
-                    // 무시
-                }
 
                 // NOT NULL 제약조건 및 UNIQUE 인덱스 적용
                 $pdo->exec("ALTER TABLE `students` MODIFY `student_hash` VARCHAR(32) NOT NULL");

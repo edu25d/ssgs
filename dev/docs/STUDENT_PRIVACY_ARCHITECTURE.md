@@ -111,7 +111,7 @@ student_hash = SHA256( Class_Secret_Salt + "_" + Student_Name ).substring(0, 32)
 | **속도 제한 (rate limiting):** 동일 `student_hash`/`class_id` 조합의 단위 시간당 로그인 시도 횟수 제한 없음 | 미구현 | `WORKFLOW_IMPROVEMENT.md` §8-3 잔여 항목 1과 동일 |
 | **CAPTCHA 도입:** 자동화 스크립트 방어 목적. 학생-facing 화면 적용 시 사용성 영향 평가 필요 | 미구현 | `WORKFLOW_IMPROVEMENT.md` §8-3 잔여 항목 2와 동일 |
 | **`students.pin` 해시 전환:** PIN `varchar(10)` 평문 저장 상태. 4자리 숫자라 해시만으로 충분하지 않으나, DB 유출 대비책으로 별도 검토 가치 있음 | 미구현 | `WORKFLOW_IMPROVEMENT.md` §8-3 잔여 항목 3과 동일 |
-| **`db_migration.php` dead code:** `name` 컬럼 존재 가정 코드(§175~§211). 현행 스키마에 `name` 컬럼이 없어 실행되지 않음 | 미정리 | `WORKFLOW_IMPROVEMENT.md` §8-3에서 언급 |
+| **`db_migration.php` dead code 정리:** `name` 컬럼 존재 가정 코드(§175~§211, student_hash 역생성 채우기 블록) 제거 완료. 현행 스키마에 `name` 컬럼이 없어 실행되지 않던 dead code 정리 | 완료 (2026-11-21) | `WORKFLOW_IMPROVEMENT.md` §8-3에서 언급 |
 | **클라이언트 마스킹 실패 시 전송 처리 (방안 A):** 마스킹 ROI가 비어있을 때 확인 모달 없이 원본이 서버로 전송될 수 있음 | 미구현 | `WORKFLOW_IMPROVEMENT.md` §8-4 |
 
 | 과제 | 상태 |
