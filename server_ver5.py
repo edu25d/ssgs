@@ -31,6 +31,12 @@ FILES = {
     "/download/school-admin-code-ver6.gs": "AppsScript_Teacher_Admin_Menu_Code_ver6.gs",
     "/download/school-admin-guide-ver6.md": "Google_Sheets_학교관리자_메뉴_가이드_ver6.md",
     "/download/school-admin-menu-ver6.zip": "School_Admin_Menu_Source_ver6.zip",
+    "/download/admin-master-code-ver7.gs": "AppsScript_Admin_Master_Menu_Code_ver7.gs",
+    "/download/admin-master-manifest-ver7.json": "AppsScript_Admin_Master_appsscript_ver7.json",
+    "/download/teacher-bound-code-ver7.gs": "AppsScript_Teacher_Code_ver7.gs",
+    "/download/teacher-bound-manifest-ver7.json": "AppsScript_Teacher_appsscript_ver7.json",
+    "/download/admin-workflow-ver7.md": "Google_Sheets_Apps_Script_학교관리자_운영_ver7.md",
+    "/download/admin-teacher-source-ver7.zip": "AppsScript_Admin_Teacher_Source_ver7.zip",
 }
 
 
