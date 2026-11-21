@@ -9,6 +9,12 @@ app/.env
 # 로그 파일
 *.log
 
+# 작업용 백업 파일 (예: upstage.php.bak, upstage.php.bak2)
+*.bak*
+
+# 작업용 임시 파일 (예: editor.php.working)
+*.working
+
 # 로컬 전용 폴더
 dev/
 .v1104/

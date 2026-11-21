@@ -48,9 +48,16 @@ node_modules/
 
 # 디버그 스크립트 및 임시 뷰 파일 (커밋 금지)
 dev/check_*.py
-dev/ftp_*.py
+dev/ftp_check*.py
+dev/ftp_download*.py
+dev/ftp_fix_config.py
+dev/ftp_upload_debug*.py
+dev/ftp_upload_tempdebug.py
 dev/url_test*.py
 dev/db/
 dev/.commit_msg.txt
 dev/docs/QUESTION_TYPE_SYSTEM.md
 app/views/grading/roi_inspector.php
+
+# 작업용 임시 파일 확장자
+*.working
