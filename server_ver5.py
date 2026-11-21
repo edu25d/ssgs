@@ -22,6 +22,7 @@ FILES = {
     "/download/student-manifest-ver5.json": "AppsScript_Student_appsscript_ver5.json",
     "/download/teacher-code-ver5.gs": "AppsScript_Teacher_Code_ver5.gs",
     "/download/teacher-access-setup-ver6.gs": "AppsScript_Teacher_Access_Setup_ver6.gs",
+    "/download/teacher-authorize-sheet-ver6.gs": "AppsScript_Teacher_Authorize_Spreadsheet_ver6.gs",
     "/download/teacher-setup-guide-ver6.md": "교사_계정_등록_절차_ver6.md",
     "/download/teacher-page-ver5.html": "AppsScript_Teacher_Index_ver5.html",
     "/download/teacher-manifest-ver5.json": "AppsScript_Teacher_appsscript_ver5.json",
