@@ -28,6 +28,9 @@ FILES = {
     "/download/teacher-page-ver5.html": "AppsScript_Teacher_Index_ver5.html",
     "/download/teacher-manifest-ver5.json": "AppsScript_Teacher_appsscript_ver5.json",
     "/download/login-guide-ver5.md": "Google_Sheets_Apps_Script_로그인_설계_ver5.md",
+    "/download/school-admin-code-ver6.gs": "AppsScript_Teacher_Admin_Menu_Code_ver6.gs",
+    "/download/school-admin-guide-ver6.md": "Google_Sheets_학교관리자_메뉴_가이드_ver6.md",
+    "/download/school-admin-menu-ver6.zip": "School_Admin_Menu_Source_ver6.zip",
 }
 
 
