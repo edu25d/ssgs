@@ -616,7 +616,7 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
             questions.forEach(q => {
                 const btn = document.createElement('button');
                 btn.className = `sub-tab-item ${q.item_id === selectedFilterKey ? 'active' : ''}`;
-                const badgeLabel = q.type === 'subjective' ? '주관식' : (q.type === 'sub_item' ? '소문항' : '객관식');
+                const badgeLabel = q.type === 'subjective' ? '주관식' : (q.type === 'sub_item' ? '소문항' : (q.type === 'short_answer' ? '단답형' : (q.type === 'matching_line' ? '선잇기' : '객관식')));
                 btn.innerHTML = `${q.item_id}번 <span class="type-badge">${badgeLabel}</span>`;
                 btn.onclick = () => { selectedFilterKey = q.item_id; saveState(); refreshTabsAndView(true); };
                 container.appendChild(btn);
