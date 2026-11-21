@@ -23,3 +23,34 @@ Thumbs.db
 # 프로젝트 루트의 이상한 시스템 디렉터리 (커밋 금지)
 %SystemDrive%/
 %SystemDrive%
+
+# 임시 디버그·테스트 파일 (커밋 금지)
+_tmp_*
+temp_debug*
+template_debug_run.php
+template_debug_result_*.json
+tmp_analysis/
+
+# 루트 복제본 및 구성 파일 (커밋 금지)
+api/
+lib/
+vercel.json
+tsconfig.json
+package.json
+package-lock.json
+php_cli.ini
+
+# Node 모듈 (커밋 금지)
+node_modules/
+
+# 시험지 PDF (커밋 금지 — 로컬 전용)
+*.pdf
+
+# 디버그 스크립트 및 임시 뷰 파일 (커밋 금지)
+dev/check_*.py
+dev/ftp_*.py
+dev/url_test*.py
+dev/db/
+dev/.commit_msg.txt
+dev/docs/QUESTION_TYPE_SYSTEM.md
+app/views/grading/roi_inspector.php
