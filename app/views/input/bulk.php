@@ -930,10 +930,11 @@ if ($assignId) {
     /**
      * [제로-PII 단말기 선-마스킹]
      * 템플릿의 privacy_mask_data를 바탕으로 전송 전 캔버스에서 인적사항 기재란을 즉시 단색 마스킹
+     * 반환: true = 마스킹 적용, false = ROI 없어 마스킹 건너뛰었음
      */
     function applyClientPrivacyMask(canvas, pageNum) {
         if (pageNum !== 1 || !privacyMaskRois || !Array.isArray(privacyMaskRois) || privacyMaskRois.length === 0) {
-            return;
+            return false;
         }
 
         const tplW = (templatePages[0] && templatePages[0].width) ? templatePages[0].width : 1200;
@@ -945,6 +946,7 @@ if ($assignId) {
         ctx.save();
         ctx.fillStyle = '#1e293b';
 
+        let masked = false;
         privacyMaskRois.forEach(roi => {
             const roiPage = roi.page || 1;
             if (roiPage === 1) {
@@ -955,11 +957,59 @@ if ($assignId) {
 
                 if (rw > 5 && rh > 5) {
                     ctx.fillRect(rx, ry, rw, rh);
+                    masked = true;
                 }
             }
         });
 
         ctx.restore();
+        return masked;
+    }
+
+    /**
+     * [마스킹 ROI 비어있음 확인 모달]
+     * 인적사항 영역 자동 탐지에 실패해 마스킹 없이 전송될 상황임을 사용자에게 알리고 선택권을 제공
+     * 반환: Promise<'retake' | 'send'>
+     */
+    function showPrivacyMaskConfirmModal() {
+        return new Promise((resolve) => {
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);backdrop-filter:blur(6px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+
+            const card = document.createElement('div');
+            card.style.cssText = 'background:#1e293b;border:1px solid rgba(255,255,255,0.15);border-radius:16px;padding:24px;width:100%;max-width:380px;color:#fff;box-shadow:0 16px 40px rgba(0,0,0,0.5);';
+
+            const title = document.createElement('div');
+            title.style.cssText = 'font-size:1.1rem;font-weight:800;margin-bottom:12px;color:#f8fafc;';
+            title.textContent = '⚠️ 인적사항 영역 자동 탐지 실패';
+
+            const body = document.createElement('div');
+            body.style.cssText = 'font-size:0.9rem;line-height:1.6;color:#cbd5e1;margin-bottom:18px;';
+            body.innerHTML = `촬영된 시험지의 인적사항(학교, 학년, 반, 번호, 이름) 영역을 자동으로 탐지하지 못했습니다.<br>
+                현재 상태로 전송하면 실명이 포함된 원본 이미지가 서버로 전송됩니다.<br><br>
+                <span style="font-size:0.82rem;color:#94a3b8;">(개인정보 미수집 시험지 등 마스킹이 불필요한 경우라면 [확인 후 전송]을 선택하세요.)</span>`;
+
+            const btnRow = document.createElement('div');
+            btnRow.style.cssText = 'display:flex;gap:10px;';
+
+            const btnRetake = document.createElement('button');
+            btnRetake.style.cssText = 'flex:1;padding:11px;border-radius:10px;font-size:0.92rem;font-weight:700;background:rgba(239,68,68,0.2);color:#f87171;border:1px solid rgba(248,113,113,0.3);cursor:pointer;';
+            btnRetake.textContent = '다시 촬영';
+            btnRetake.onclick = () => { overlay.remove(); resolve('retake'); };
+
+            const btnSend = document.createElement('button');
+            btnSend.style.cssText = 'flex:1.4;padding:11px;border-radius:10px;font-size:0.92rem;font-weight:700;background:linear-gradient(135deg,#10b981 0%,#059669 100%);color:#fff;border:none;cursor:pointer;box-shadow:0 4px 12px rgba(16,185,129,0.4);';
+            btnSend.textContent = '확인 후 전송';
+            btnSend.onclick = () => { overlay.remove(); resolve('send'); };
+
+            btnRow.appendChild(btnRetake);
+            btnRow.appendChild(btnSend);
+            card.appendChild(title);
+            card.appendChild(body);
+            card.appendChild(btnRow);
+            overlay.appendChild(card);
+            document.body.appendChild(overlay);
+        });
     }
     let currentIndex = 0;
     let currentPageIndex = 0;
@@ -1079,7 +1129,21 @@ if ($assignId) {
                     tempCanvas.height = imageData.height;
                     const tempCtx = tempCanvas.getContext('2d');
                     tempCtx.putImageData(imageData, 0, 0);
-                    applyClientPrivacyMask(tempCanvas, pageIndex + 1);
+                    const maskResult = applyClientPrivacyMask(tempCanvas, pageIndex + 1);
+                    if (!maskResult) {
+                        // ROI 비어있음: 확인 모달 표시 후 선택에 따라 저장 여부 결정
+                        showPrivacyMaskConfirmModal().then((choice) => {
+                            if (choice === 'send') {
+                                if (!students[studentIndex].images) students[studentIndex].images = [];
+                                students[studentIndex].images[pageIndex] = tempCanvas.toDataURL('image/jpeg', 0.85);
+                            }
+                            // 'retake' 선택: 저장하지 않음 (촬영 화면에서 재촬영 유도)
+                            updateStudentStatus(studentIndex);
+                            saveToLocalCache();
+                            renderUI();
+                        });
+                        return; // 모달 처리 완료 전까지 콜백의 나머지 실행 중단
+                    }
                     if (!students[studentIndex].images) students[studentIndex].images = [];
                     students[studentIndex].images[pageIndex] = tempCanvas.toDataURL('image/jpeg', 0.85);
                 }
@@ -1447,8 +1511,40 @@ if ($assignId) {
             setTimeout(() => flash.style.opacity = '0', 120);
         }
 
-        // 3. 원본 이미지 기본 백업 (Soft Fallback)
-        applyClientPrivacyMask(canvas, currentTargetPage + 1);
+        // 3. 원본 이미지 기본 백업 (Soft Fallback) — ROI 비어있으면 확인 모달 후 분기
+        const maskResult = applyClientPrivacyMask(canvas, currentTargetPage + 1);
+        if (!maskResult) {
+            showPrivacyMaskConfirmModal().then((choice) => {
+                if (choice === 'send') {
+                    // 마스킹 없이 그대로 백업 저장 + OpenCV 원근 보정 의뢰
+                    const fallbackDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                    if (!targetStudent.images) targetStudent.images = [];
+                    targetStudent.images[currentTargetPage] = fallbackDataUrl;
+
+                    if (cvWorker) {
+                        try {
+                            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                            cvWorker.postMessage({
+                                studentIndex: currentTargetIndex,
+                                pageIndex: currentTargetPage,
+                                imageData: imgData,
+                                width: canvas.width,
+                                height: canvas.height
+                            }, [imgData.data.buffer]);
+                        } catch(err) {
+                            console.warn("Worker postMessage error:", err);
+                        }
+                    }
+                } else {
+                    // 'retake' 선택: 백업 저장하지 않고 상태 갱신 + UI 리렌더링만
+                    updateStudentStatus(currentTargetIndex);
+                    saveToLocalCache();
+                    renderUI();
+                }
+            });
+            return;
+        }
+
         const fallbackDataUrl = canvas.toDataURL('image/jpeg', 0.85);
         if (!targetStudent.images) targetStudent.images = [];
         targetStudent.images[currentTargetPage] = fallbackDataUrl;

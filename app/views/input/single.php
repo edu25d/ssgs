@@ -868,10 +868,11 @@ const privacyMaskRois = <?= json_encode($privacyMaskRois, JSON_UNESCAPED_UNICODE
 /**
  * [제로-PII 단말기 선-마스킹]
  * 서버로 전송하기 전 단말기 캔버스에서 인적사항(학년/반/번호/이름) 기재란을 즉시 단색 마스킹
+ * 반환: true = 마스킹 적용(사용 가능한 ROI 존재), false = ROI 없어 마스킹 건너뛰었음
  */
 function applyClientPrivacyMask(canvas, pageNum) {
     if (pageNum !== 1 || !privacyMaskRois || !Array.isArray(privacyMaskRois) || privacyMaskRois.length === 0) {
-        return;
+        return false;
     }
 
     const tplW = (templatePages[0] && templatePages[0].width) ? templatePages[0].width : 1200;
@@ -883,6 +884,7 @@ function applyClientPrivacyMask(canvas, pageNum) {
     ctx.save();
     ctx.fillStyle = '#1e293b'; // 슬레이트 다크 컬러
 
+    let masked = false;
     privacyMaskRois.forEach(roi => {
         const roiPage = roi.page || 1;
         if (roiPage === 1) {
@@ -893,11 +895,59 @@ function applyClientPrivacyMask(canvas, pageNum) {
 
             if (rw > 5 && rh > 5) {
                 ctx.fillRect(rx, ry, rw, rh);
+                masked = true;
             }
         }
     });
 
     ctx.restore();
+    return masked;
+}
+
+/**
+ * [마스킹 ROI 비어있음 확인 모달]
+ * 인적사항 영역 자동 탐지에 실패해 마스킹 없이 전송될 상황임을 사용자에게 알리고 선택권을 제공
+ * 반환: Promise<'retake' | 'send'>  — 'retake'=다시 촬영, 'send'=마스킹 없이 전송 계속
+ */
+function showPrivacyMaskConfirmModal() {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);backdrop-filter:blur(6px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+
+        const card = document.createElement('div');
+        card.style.cssText = 'background:#1e293b;border:1px solid rgba(255,255,255,0.15);border-radius:16px;padding:24px;width:100%;max-width:380px;color:#fff;box-shadow:0 16px 40px rgba(0,0,0,0.5);';
+
+        const title = document.createElement('div');
+        title.style.cssText = 'font-size:1.1rem;font-weight:800;margin-bottom:12px;color:#f8fafc;';
+        title.textContent = '⚠️ 인적사항 영역 자동 탐지 실패';
+
+        const body = document.createElement('div');
+        body.style.cssText = 'font-size:0.9rem;line-height:1.6;color:#cbd5e1;margin-bottom:18px;';
+        body.innerHTML = `촬영된 시험지의 인적사항(학교, 학년, 반, 번호, 이름) 영역을 자동으로 탐지하지 못했습니다.<br>
+            현재 상태로 전송하면 실명이 포함된 원본 이미지가 서버로 전송됩니다.<br><br>
+            <span style="font-size:0.82rem;color:#94a3b8;">(개인정보 미수집 시험지 등 마스킹이 불필요한 경우라면 [확인 후 전송]을 선택하세요.)</span>`;
+
+        const btnRow = document.createElement('div');
+        btnRow.style.cssText = 'display:flex;gap:10px;';
+
+        const btnRetake = document.createElement('button');
+        btnRetake.style.cssText = 'flex:1;padding:11px;border-radius:10px;font-size:0.92rem;font-weight:700;background:rgba(239,68,68,0.2);color:#f87171;border:1px solid rgba(248,113,113,0.3);cursor:pointer;';
+        btnRetake.textContent = '다시 촬영';
+        btnRetake.onclick = () => { overlay.remove(); resolve('retake'); };
+
+        const btnSend = document.createElement('button');
+        btnSend.style.cssText = 'flex:1.4;padding:11px;border-radius:10px;font-size:0.92rem;font-weight:700;background:linear-gradient(135deg,#10b981 0%,#059669 100%);color:#fff;border:none;cursor:pointer;box-shadow:0 4px 12px rgba(16,185,129,0.4);';
+        btnSend.textContent = '확인 후 전송';
+        btnSend.onclick = () => { overlay.remove(); resolve('send'); };
+
+        btnRow.appendChild(btnRetake);
+        btnRow.appendChild(btnSend);
+        card.appendChild(title);
+        card.appendChild(body);
+        card.appendChild(btnRow);
+        overlay.appendChild(card);
+        document.body.appendChild(overlay);
+    });
 }
 let activeSlotIdx = 0;
 let slots = [];
@@ -1009,7 +1059,14 @@ document.getElementById('fileInput').addEventListener('change', async function(e
 
                 // [단계 1-1] 제로-PII 단말기 선-마스킹 (1쪽 인적사항 영역 즉시 마스킹)
                 if (activeSlotIdx === 0) {
-                    applyClientPrivacyMask(warpedCanvas, 1);
+                    const maskResult = applyClientPrivacyMask(warpedCanvas, 1);
+                    if (!maskResult) {
+                        const choice = await showPrivacyMaskConfirmModal();
+                        if (choice === 'retake') {
+                            return;
+                        }
+                        // 'send' 선택: 마스킹 없이 그대로 진행
+                    }
                 }
 
                 // [단계 2] 스마트 동일면 중복 촬영 감지 (Smart Image Diff Guard)
@@ -1343,7 +1400,15 @@ async function processAndSubmit() {
             const warpedCanvas = warpPerspectiveFast(scaledSrcCanvas);
 
             // [단말기 선-마스킹] 1쪽 인적사항 기재란 즉시 단색 마스킹
-            applyClientPrivacyMask(warpedCanvas, 1);
+            const maskResult = applyClientPrivacyMask(warpedCanvas, 1);
+            if (!maskResult) {
+                const choice = await showPrivacyMaskConfirmModal();
+                if (choice === 'retake') {
+                    setProgress(0, 0, '촬영 재시작', '인적사항 영역 탐지 실패로 촬영을 다시 시작합니다.');
+                    return;
+                }
+                // 'send' 선택: 마스킹 없이 그대로 전송 계속
+            }
 
             setProgress(2, 50, "최적화 압축 및 전송 준비", "고화질 이미지를 가볍게 압축하여 전송하고 있습니다...");
             const blob = await new Promise(resolve => warpedCanvas.toBlob(resolve, 'image/jpeg', 0.80));

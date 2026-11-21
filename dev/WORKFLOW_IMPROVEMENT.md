@@ -99,11 +99,11 @@
 
 ---
 
-## 7. 후속 확인·보완 항목 (STUDENT_PRIVACY_ARCHITECTURE.md §7 이관)
+## 7. 후속 확인·보완 항목 (STUDENT_PRIVACY_ARCHITECTURE.md §7과 함께 관리)
 
-STUDENT_PRIVACY_ARCHITECTURE.md의 Phase 1~3은 HANDOFF.md 기준 전체 완료 상태이나, 아래 항목은 **코드 존재 여부와 별개로 실서버 정상 동작을 재확인할 필요가 있는 미세 항목**이다. 바이브 코딩 작업자가 검증을 이어가기 위한 체크리스트다.
+이 절은 STUDENT_PRIVACY_ARCHITECTURE.md §7에서 이관한 항목들로, STUDENT_PRIVACY_ARCHITECTURE.md §7과 함께 관리한다. STUDENT_PRIVACY_ARCHITECTURE.md §7에는 현재 미구현 항목(속도 제한, CAPTCHA, students.pin 해시 전환, db_migration.php dead code)과 함께 클라이언트 마스킹 실패 처리(§8-4) 및 소문항 묶음 보기(§8-5)가 추가로 정리되어 있다.
 
-> **완료 처리 규칙:** 이 절의 항목을 하나 완료할 때마다 [STUDENT_PRIVACY_ARCHITECTURE.md](<dev/docs/STUDENT_PRIVACY_ARCHITECTURE.md>) §7의 동일 항목도 함께 완료 표시하거나 제거한다. 두 문서는 서로 대응되므로 한쪽만 업데이트하면 상태가 어긋난다. 개인 메모장·체크리스트·이슈 트래커 등으로 양쪽 완료 여부를 동시에 관리하는 것을 권장한다.
+> **완료 처리 규칙:** 이 절의 항목을 하나 완료할 때마다 STUDENT_PRIVACY_ARCHITECTURE.md §7의 동일 항목도 함께 완료 표시하거나 제거한다. 두 문서는 서로 대응되므로 한쪽만 업데이트하면 상태가 어긋난다. 개인 메모장·체크리스트·이슈 트래커 등으로 양쪽 완료 여부를 동시에 관리하는 것을 권장한다.
 
 ### 7-1. `privacy_crypto.js` 배포 확인 ✅ 완료 (2026-09-07)
 
@@ -148,6 +148,8 @@ STUDENT_PRIVACY_ARCHITECTURE.md의 Phase 1~3은 HANDOFF.md 기준 전체 완료 
 ---
 
 ## 8. 향후 검토 과제
+
+> **다른 문서와의 관계:** 이 절의 항목 중 일부는 STUDENT_PRIVACY_ARCHITECTURE.md §7(미구현 잔여 과제)과 겹친다. 특히 §8-3의 잔여 검토 항목 3개(속도 제한, CAPTCHA, PIN 해시)는 STUDENT_PRIVACY_ARCHITECTURE.md §7에 이미 정리되어 있다. 해당 항목을 구현할 때는 양쪽 문서를 함께 업데이트한다.
 
 현재 코드베이스에서 발견되었으나 아직 결론을 내리지 않은 문제다. 해당 과제를 처리할 때 아래 항목을 함께 검토한다.
 
