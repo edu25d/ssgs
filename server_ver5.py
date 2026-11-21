@@ -2,7 +2,7 @@ import mimetypes
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 ROOT = Path(__file__).resolve().parent
 FILES = {
@@ -21,6 +21,8 @@ FILES = {
     "/download/student-page-ver5.html": "AppsScript_Student_Index_ver5.html",
     "/download/student-manifest-ver5.json": "AppsScript_Student_appsscript_ver5.json",
     "/download/teacher-code-ver5.gs": "AppsScript_Teacher_Code_ver5.gs",
+    "/download/teacher-access-setup-ver6.gs": "AppsScript_Teacher_Access_Setup_ver6.gs",
+    "/download/teacher-setup-guide-ver6.md": "교사_계정_등록_절차_ver6.md",
     "/download/teacher-page-ver5.html": "AppsScript_Teacher_Index_ver5.html",
     "/download/teacher-manifest-ver5.json": "AppsScript_Teacher_appsscript_ver5.json",
     "/download/login-guide-ver5.md": "Google_Sheets_Apps_Script_로그인_설계_ver5.md",
@@ -57,8 +59,13 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(content)))
         self.send_header("Cache-Control", "no-store")
         if path.startswith("/download/"):
+            filename = Path(name).name
+            ascii_name = (
+                filename.encode("ascii", "ignore").decode("ascii") or "download"
+            )
             self.send_header(
-                "Content-Disposition", f'attachment; filename="{Path(name).name}"'
+                "Content-Disposition",
+                f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename)}",
             )
         self.end_headers()
         if send_body:
