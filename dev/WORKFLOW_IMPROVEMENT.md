@@ -101,7 +101,7 @@
 
 ## 7. 후속 확인·보완 항목 (STUDENT_PRIVACY_ARCHITECTURE.md §7과 함께 관리)
 
-이 절은 STUDENT_PRIVACY_ARCHITECTURE.md §7에서 이관한 항목들로, STUDENT_PRIVACY_ARCHITECTURE.md §7과 함께 관리한다. STUDENT_PRIVACY_ARCHITECTURE.md §7에는 현재 미구현 항목(속도 제한, CAPTCHA, students.pin 해시 전환, db_migration.php dead code)과 함께 클라이언트 마스킹 실패 처리(§8-4) 및 소문항 묶음 보기(§8-5)가 추가로 정리되어 있다.
+이 절은 STUDENT_PRIVACY_ARCHITECTURE.md §7에서 이관한 항목들로, STUDENT_PRIVACY_ARCHITECTURE.md §7과 함께 관리한다. STUDENT_PRIVACY_ARCHITECTURE.md §7에는 현재 미구현 항목(속도 제한, CAPTCHA, students.pin 해시 전환, db_migration.php dead code)과 함께 클라이언트 마스킹 실패 처리(§8-4)가 추가로 정리되어 있다.
 
 > **완료 처리 규칙:** 이 절의 항목을 하나 완료할 때마다 STUDENT_PRIVACY_ARCHITECTURE.md §7의 동일 항목도 함께 완료 표시하거나 제거한다. 두 문서는 서로 대응되므로 한쪽만 업데이트하면 상태가 어긋난다. 개인 메모장·체크리스트·이슈 트래커 등으로 양쪽 완료 여부를 동시에 관리하는 것을 권장한다.
 
@@ -212,16 +212,6 @@
   - **처리 방향 (미정):** 시험지 템플릿(`templates` 테이블) 수준에서 "인적사항 마스킹 필요 여부"를 구분하는 플래그 또는 메타데이터를 도입할지 검토. 마스킹이 불필요한 시험지라면 마스킹 ROI 비어있음이 오류가 아니므로 확인 모달 없이 전송 허용. 반대로 마스킹이 필요한 시험지인데 ROI가 비어있다면 방안 A의 모달 표시.
   - **구현 시 주의:** "마스킹 불필요"와 "마스킹 실패"를 구분해야 함. 전자는 정상 상황, 후자는 오류 상황. 두 경우를 혼동하면 마스킹이 필요한 시험지에서 마스킹 없이 전송되는 사고가 발생할 수 있음.
 - **관련 코드:** `views/input/bulk.php`의 클라이언트 측 마스킹 로직, `api/grading/submit_images.php`의 서버 수신 로직. `app/includes/common/upstage.php`의 `getOrDetectPrivacyMaskRois()` 및 마스킹 ROI 탐지 결과 처리도 함께 확인.
----
-
-### 8-5. 검토 화면의 소문항 묶음 보기/분리 보기 + 부분점수 동시 처리 조작
-
-- **배경/현상:** 검토 화면에서 소문항이 있는 문제를 볼 때, 하나의 문항으로 묶어서 볼지 각 소문항으로 나눠서 볼지 사용자가 방식을 바꿔가며 검토할 수 있어야 함. 특히 소문항이 있는 문제를 하나로 묶어서 검토하는 상황에서 부분점수도 함께 인정되면 각 소문항을 개별적으로 채점해야 하므로, 묶음 보기 + 소문항별 부분점수 처리를 어떻게 조작할지 UI 조작법 설계가 필요함.
-- **현재 상태:** `review.php`는 소문항 답안 전환(`compositeSelector`) 기능은 있지만, 묶음 보기/분리 보기 전환이나 소문항 묶음 단위 부분점수 처리 조작은 별도 구현이 필요한 상태로 보임.
-- **관련 코드:** `app/views/grading/review.php`(compositeSelector, renderTable, markScore/enterPartialMode 등), `app/api/grading/save_score.php`
-- **남은 과제:** 검토 화면에서 소문항 묶음 보기/분리 보기 전환 기능, 그리고 묶음 상태에서도 소문항별 채점(부분점수 포함)을 할 수 있는 조작법 설계·구현. 이것은 A5에서 추가로 확인된 핵심 요구 사항이며, 통합 이슈 맵(INTEGRATION_ISSUE_MAP.md A5, ALIGNMENT_ISSUE_MAP.md AIM-05)에도 관련 내용으로 남겨둠.
-- **참고 구분:** 검토 화면의 부분점수는 크게 (1) 소문항 문제에서의 부분점수(자동 채점 대상 소문항의 배점 기반, 오답 소문항 배점 제외 방식 가능)와 (2) 주관식 문제에서의 부분점수(교사 수동 부여)로 나눠 볼 수 있고, 소문항이 없는 객관식·주관식 문제도 검토 화면에서 부분점수 처리가 가능한 것은 의도된 동작으로 봐도 무방함.
-
 ---
 
 > **주의:** 이 문서의 §7, §8은 진행 중인 확인·검토 항목이다. 각 항목이 해결되면 해당 절에서 완료 처리하고, 완전히 해소된 섹션은 삭제하거나 "완료" 표시를 남긴다.
