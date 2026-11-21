@@ -516,8 +516,6 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
         .roi-item.sub_item { border-left-color: #d97706; }
 
-        .roi-item.composite { border-left-color: #f97316; }
-
 
 
         .roi-item.selected-focus {
@@ -598,27 +596,13 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
 
 
-        .btn-merge-composite { font-size: 11px; padding: 3px 7px; border-radius: 4px; border: 1px solid #f97316; background: transparent; color: #f97316; cursor: pointer; white-space: nowrap; }
-
-        .btn-merge-composite:hover { background: #f97316; color: #fff; }
-
-        .btn-split-sub { font-size: 11px; padding: 3px 7px; border-radius: 4px; border: 1px solid #8b5cf6; background: transparent; color: #8b5cf6; cursor: pointer; white-space: nowrap; }
-
-        .btn-split-sub:hover { background: #8b5cf6; color: #fff; }
-
         .btn-add-sub { font-size: 11px; padding: 3px 7px; border-radius: 4px; border: 1px solid #8b5cf6; background: rgba(139, 92, 246, 0.2); color: #c4b5fd; cursor: pointer; white-space: nowrap; font-weight: 700; transition: all 0.15s; }
 
         .btn-add-sub:hover { background: #8b5cf6; color: #fff; }
 
-        .btn-add-sub.comp { border-color: #f97316; background: rgba(249, 115, 22, 0.2); color: #fdba74; }
 
-        .btn-add-sub.comp:hover { background: #f97316; color: #fff; }
-
-        .composite-ans-list { font-size: 11px; color: #f97316; margin-top: 2px; }
 
         .adding-sub-guide { font-size: 11.5px; color: #c4b5fd; font-weight: 700; margin-top: 3px; display: flex; align-items: center; gap: 4px; }
-
-        .adding-sub-guide.comp { color: #fdba74; }
 
         .roi-item.adding-sub-mode {
 
@@ -627,16 +611,6 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
             box-shadow: 0 0 0 2px #8b5cf6, 0 4px 12px rgba(139, 92, 246, 0.3) !important;
 
             animation: pulseSubBorder 1.2s infinite alternate;
-
-        }
-
-        .roi-item.adding-sub-mode.composite {
-
-            border-left-color: #f97316 !important;
-
-            box-shadow: 0 0 0 2px #f97316, 0 4px 12px rgba(249, 115, 22, 0.3) !important;
-
-            animation: pulseCompBorder 1.2s infinite alternate;
 
         }
 
@@ -2442,11 +2416,9 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
 
 
-                const isComp = (targetItem.type === 'composite');
+                const themeColor = '#8b5cf6';
 
-                const themeColor = isComp ? '#f97316' : '#8b5cf6';
-
-                const fillColor = isComp ? 'rgba(249, 115, 22, 0.2)' : 'rgba(139, 92, 246, 0.2)';
+                const fillColor = 'rgba(139, 92, 246, 0.2)';
 
 
 
@@ -2760,23 +2732,11 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
 
 
-                    if (targetItem.type === 'composite') {
+                    // 소문항(sub_item) 추가
 
-                        if (!Array.isArray(targetItem.ans_rois)) {
+                    targetItem.type = 'sub_item';
 
-                            targetItem.ans_rois = targetItem.ans_roi ? [targetItem.ans_roi] : [];
-
-                        }
-
-                        targetItem.ans_rois.push(newRect);
-
-                    } else {
-
-                        // 소문항(sub_item) 추가
-
-                        targetItem.type = 'sub_item';
-
-                        targetItem.sub_type = targetItem.sub_type || 'objective';
+                    targetItem.sub_type = targetItem.sub_type || 'objective';
 
 
 
@@ -4070,23 +4030,13 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
             const subCount = parentKey ? rois.filter(x => x.num_roi && `${x.page_uid}_${Math.round(x.num_roi.x)}_${Math.round(x.num_roi.y)}` === parentKey).length : 1;
 
-            const hasMultipleAns = (item.type === 'composite' && Array.isArray(item.ans_rois) && item.ans_rois.length > 1) || subCount > 1;
+            const hasMultipleAns = subCount > 1;
 
 
 
             if (hasMultipleAns) {
 
-                // 답안 영역이 이미 2개 이상: 소문항 ⇄ 복합 다답형 안에서만 안전 순환
-
-                if (item.type === 'composite') {
-
-                    splitCompositeToSubItems(idx);
-
-                } else {
-
-                    mergeSubItemsToComposite(item.id);
-
-                }
+                // 답안 영역이 이미 2개 이상: 유형 변경 없이 현재 상태 유지
 
             } else {
 
@@ -4532,45 +4482,12 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
 
 
-                // 1. composite 타입인 경우 복수 ans_rois 검사
-
-                if (item.type === 'composite' && Array.isArray(item.ans_rois) && item.ans_rois.length > 0) {
-
-                    for (let k = item.ans_rois.length - 1; k >= 0; k--) {
-
-                        const rect = item.ans_rois[k];
-
-                        if (!rect) continue;
-
-                        const handles = getHandles(rect);
-
-                        for (let hKey in handles) {
-
-                            const h = handles[hKey];
-
-                            if (x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h) {
-
-                                return { itemIndex: i, roiType: 'ans_rois', subAnsIndex: k, handle: hKey };
-
-                            }
-
-                        }
-
-                        if (x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h) {
-
-                            return { itemIndex: i, roiType: 'ans_rois', subAnsIndex: k, handle: null };
-
-                        }
-
-                    }
-
-                }
 
 
 
                 // 2. 일반 ans_roi 및 num_roi 검사
 
-                const roiTypes = (item.type === 'composite' && Array.isArray(item.ans_rois)) ? ['num_roi'] : ['ans_roi', 'num_roi'];
+                const roiTypes = ['ans_roi', 'num_roi'];
 
 
 
@@ -4662,7 +4579,7 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
             if (r.type === type) {
 
-                if (type === 'sub_item' || type === 'composite') {
+                if (type === 'sub_item') {
 
                     startAddAnsRoiMode(idx);
 
@@ -4675,8 +4592,6 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
 
             // 이미 다중 답안을 가진 문항을 단일 문항으로 변경하려는 경우
-
-            const isCompMulti = (r.type === 'composite' && Array.isArray(r.ans_rois) && r.ans_rois.length > 1);
 
             const pk = r.num_roi ? `${r.page_uid}_${Math.round(r.num_roi.x)}_${Math.round(r.num_roi.y)}` : null;
 
@@ -4694,7 +4609,7 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
 
 
-            if (isSingleTarget && (isCompMulti || isSubMulti)) {
+            if (isSingleTarget && isSubMulti) {
 
                 let targetName = '단일 문항';
 
@@ -4717,14 +4632,6 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
                 }
 
                 pushUndoState();
-
-                if (isCompMulti) {
-
-                    r.ans_roi = r.ans_rois[0];
-
-                    r.ans_rois = null;
-
-                }
 
                 if (isSubMulti) {
 
@@ -4774,16 +4681,6 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
                 targetRoi.ans_rois = null;
 
-            } else if (type === 'composite') {
-
-                targetRoi.sub_id = null;
-
-                if (!Array.isArray(targetRoi.ans_rois) || targetRoi.ans_rois.length === 0) {
-
-                    targetRoi.ans_rois = targetRoi.ans_roi ? [targetRoi.ans_roi] : [];
-
-                }
-
             } else {
 
                 targetRoi.ans_rois = null;
@@ -4814,9 +4711,9 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
 
 
-            // 소문항 또는 복합 버튼 클릭 시 reindexRois 전에 추가 모드 타깃을 미리 등록하여 단일 객관식 강등 방지
+            // 소문항 버튼 클릭 시 reindexRois 전에 추가 모드 타깃을 미리 등록하여 단일 객관식 강등 방지
 
-            if (startDrawMode && (type === 'composite' || type === 'sub_item')) {
+            if (startDrawMode && type === 'sub_item') {
 
                 addAnsTargetIndex = selectedRoiIndex;
 
@@ -4836,163 +4733,11 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
 
 
-            if (startDrawMode && (type === 'composite' || type === 'sub_item')) {
+            if (startDrawMode && type === 'sub_item') {
 
                 startAddAnsRoiMode(selectedRoiIndex);
 
             }
-
-        }
-
-
-
-        // 소문항 그룹 → 복합 다답형으로 병합
-
-        function mergeSubItemsToComposite(mainId) {
-
-            pushUndoState();
-
-            // 같은 mainId를 가진 sub_item 들 수집
-
-            const groupItems = rois.filter(r => r.type === 'sub_item' && r.id === mainId);
-
-            if (groupItems.length < 2) {
-
-                showToast('소문항이 2개 이상이어야 복합 다답형으로 묶을 수 있습니다.');
-
-                return;
-
-            }
-
-            const firstItem = groupItems[0];
-
-            const totalScore = groupItems.reduce((s, r) => s + (r.score || 0), 0);
-
-            const allAnswers = groupItems.map(r => r.answer || '').filter(a => a).join(', ');
-
-            const ansRoisArr = groupItems.map(r => r.ans_roi);
-
-
-
-            // 기존 sub_items 모두 제거
-
-            rois = rois.filter(r => !(r.type === 'sub_item' && r.id === mainId));
-
-
-
-            // composite 문항 하나 삽입 (원래 첫 소문항 위치 기준)
-
-            const insertIdx = rois.findIndex(r => r.id > mainId);
-
-            const newRoi = {
-
-                id: mainId,
-
-                sub_id: null,
-
-                display_num: String(mainId),
-
-                page_uid: firstItem.page_uid,
-
-                page: firstItem.page,
-
-                num_roi: firstItem.num_roi,
-
-                ans_roi: ansRoisArr[0],
-
-                ans_rois: ansRoisArr,
-
-                type: 'composite',
-
-                sub_type: 'composite',
-
-                answer: allAnswers,
-
-                score: totalScore
-
-            };
-
-            if (insertIdx === -1) {
-
-                rois.push(newRoi);
-
-            } else {
-
-                rois.splice(insertIdx, 0, newRoi);
-
-            }
-
-            reindexRois();
-
-            draw();
-
-            renderSidebar();
-
-            showToast(`Q${mainId} 소문항들을 복합 다답형으로 병합했습니다.`);
-
-        }
-
-
-
-        // 복합 다답형 → 소문항 분할
-
-        function splitCompositeToSubItems(idx) {
-
-            pushUndoState();
-
-            const r = rois[idx];
-
-            if (r.type !== 'composite' || !Array.isArray(r.ans_rois) || r.ans_rois.length < 2) {
-
-                showToast('복합 다답형 문항(ans_rois 2개 이상)에만 분할 가능합니다.');
-
-                return;
-
-            }
-
-            const mainId = r.id;
-
-            const perScore = Math.floor((r.score || 0) / r.ans_rois.length);
-
-            const allAnswers = (r.answer || '').split(',').map(a => a.trim());
-
-            const newItems = r.ans_rois.map((ar, i) => ({
-
-                id: mainId,
-
-                sub_id: i + 1,
-
-                display_num: `${mainId}-${i + 1}`,
-
-                page_uid: r.page_uid,
-
-                page: r.page,
-
-                num_roi: r.num_roi,
-
-                ans_roi: ar,
-
-                ans_rois: null,
-
-                type: 'sub_item',
-
-                sub_type: 'objective',
-
-                answer: allAnswers[i] || '',
-
-                score: perScore
-
-            }));
-
-            rois.splice(idx, 1, ...newItems);
-
-            reindexRois();
-
-            draw();
-
-            renderSidebar();
-
-            showToast(`Q${mainId} 복합 다답형을 소문항으로 분할했습니다.`);
 
         }
 
@@ -5062,21 +4807,6 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
                 const isUnderAddition = targetRoi && (r.id === targetRoi.id || i === addAnsTargetIndex || (r.num_roi && targetRoi.num_roi && r.page_uid === targetRoi.page_uid && Math.round(r.num_roi.x) === Math.round(targetRoi.num_roi.x) && Math.round(r.num_roi.y) === Math.round(targetRoi.num_roi.y)));
 
-
-
-                // 복합 다답형인데 답안 영역이 1개 이하로 남은 경우 (단, 추가 모드 중이면 유지)
-
-                if (r.type === 'composite' && Array.isArray(r.ans_rois) && r.ans_rois.length <= 1 && !isUnderAddition) {
-
-                    r.ans_roi = (r.ans_rois && r.ans_rois[0]) || r.ans_roi;
-
-                    r.ans_rois = null;
-
-                    r.type = 'objective';
-
-                    r.sub_id = null;
-
-                }
 
 
 
@@ -5740,7 +5470,6 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
                 const displayLabel = r.display_num ? `Q${r.display_num}` : `Q${r.id}`;
 
-                const isComposite = (r.type === 'composite');
 
 
 
@@ -5785,56 +5514,6 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
 
                 // 2. 답안 작성란 상자
-
-                if (isComposite && Array.isArray(r.ans_rois) && r.ans_rois.length > 0) {
-
-                    // 복합 다답형: 오렌지색으로 개별 ans_rois 렌더링
-
-                    const compColor = "#f97316";
-
-                    r.ans_rois.forEach((ar, ai) => {
-
-                        if (!ar) return;
-
-                        ctx.save();
-
-                        if (isSelected) {
-
-                            ctx.shadowColor = "#fb923c";
-
-                            ctx.shadowBlur = 14;
-
-                            ctx.lineWidth = 3.5;
-
-                        } else {
-
-                            ctx.lineWidth = 2;
-
-                        }
-
-                        ctx.strokeStyle = compColor;
-
-                        ctx.fillStyle = isSelected ? "rgba(249, 115, 22, 0.35)" : "rgba(249, 115, 22, 0.18)";
-
-                        ctx.fillRect(ar.x, ar.y, ar.w, ar.h);
-
-                        ctx.strokeRect(ar.x, ar.y, ar.w, ar.h);
-
-                        ctx.restore();
-
-
-
-                        ctx.fillStyle = compColor;
-
-                        ctx.font = "bold 13px sans-serif";
-
-                        ctx.fillText(`${displayLabel} 답-${ai + 1} [복합]`, ar.x, ar.y - 5);
-
-                        drawHandles(ar);
-
-                    });
-
-                } else {
 
                     // 4대 문항 표준 유형 렌더링
 
@@ -5972,7 +5651,6 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
                 const isSubItem = (r.type === 'sub_item');
 
-                const isComposite = (r.type === 'composite');
 
                 const displayLabel = r.display_num ? `Q${r.display_num}` : `Q${r.id}`;
 
@@ -6024,37 +5702,9 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
 
 
-                // 복합 다답형 정답 영역 개수
-
-                const ansRoisCount = (isComposite && Array.isArray(r.ans_rois)) ? r.ans_rois.length : 0;
-
-                const compositeAnsInfo = (isComposite && ansRoisCount > 1)
-
-                    ? `<div class="composite-ans-list">📦 답안 영역: ${ansRoisCount}개</div>`
-
-                    : '';
-
-                const splitBtn = isComposite && ansRoisCount >= 2
-
-                    ? `<button class="btn-split-sub" onclick="event.stopPropagation(); splitCompositeToSubItems(${idx})">🔀 소문항 분할</button>`
-
-                    : '';
-
-                const mergeBtn = isLastSubInGroup && subGroupCount >= 2
-
-                    ? `<button class="btn-merge-composite" onclick="event.stopPropagation(); mergeSubItemsToComposite(${r.id})">🔗 묶기</button>`
-
-                    : '';
-
                 const addSubBtn = (isSubItem && isLastSubInGroup)
 
                     ? `<button class="btn-add-sub" onclick="event.stopPropagation(); startAddAnsRoiMode(${idx})">➕ 소문항</button>`
-
-                    : '';
-
-                const addCompBtn = (isComposite && isCurrentPage)
-
-                    ? `<button class="btn-add-sub comp" onclick="event.stopPropagation(); startAddAnsRoiMode(${idx})">➕ 답란</button>`
 
                     : '';
 
@@ -6074,7 +5724,7 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
                 } else if (displayType === 'short_answer') {
 
-                    answerPlaceholder = isComposite ? '복합 정답 (예: 체, 거름종이)' : (isSubItem ? '소문항 정답' : '단답형 정답 또는 OX (예: 가치 또는 ○)');
+                    answerPlaceholder = isSubItem ? '소문항 정답' : '단답형 정답 또는 OX (예: 가치 또는 ○)';
 
                 }
 
@@ -6082,7 +5732,7 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
                 const addingGuideHtml = isAddingThisItem
 
-                    ? `<div class="adding-sub-guide ${isComposite ? 'comp' : ''}">✏️ 시험지 위에 추가 ${isComposite ? '답안 영역' : '소문항'}을 드래그하세요 (완료: 휠 / ESC)</div>`
+                    ? `<div class="adding-sub-guide">✏️ 시험지 위에 추가할 소문항을 드래그하세요 (완료: 휠 / ESC)</div>`
 
                     : '';
 
@@ -6287,13 +5937,13 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
                 let shortPartialHtml = '';
 
-                if (displayType === 'short_answer' && (isComposite || (r.answer && r.answer.includes(',')))) {
+                if (displayType === 'short_answer' && (r.answer && r.answer.includes(','))) {
 
                     const tokens = (r.answer || '').split(/[,;]+/).map(s => s.trim()).filter(Boolean);
 
-                    if (tokens.length >= 2 || (isComposite && ansRoisCount >= 2)) {
+                    if (tokens.length >= 2) {
 
-                        const count = Math.max(tokens.length, ansRoisCount);
+                        const count = tokens.length;
 
                         let partialSection = '';
 
@@ -6429,19 +6079,11 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
                             ${addSubBtn}
 
-                            ${addCompBtn}
-
-                            ${splitBtn}
-
-                            ${mergeBtn}
-
                             <button class="btn-delete" title="문항 삭제" onclick="event.stopPropagation(); deleteRoi(${idx})">🗑️</button>
 
                         </div>
 
                     </div>
-
-                    ${compositeAnsInfo}
 
                     ${addingGuideHtml}
 

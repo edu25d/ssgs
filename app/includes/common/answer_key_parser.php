@@ -442,6 +442,7 @@ if (!function_exists('normalizeAnswerEntry')) {
             $subAnswers = [];
             $allOx = true;
             $allSym = true;
+            $allShortAnswerCandidate = true;
 
             foreach ($mParen[1] as $k => $subNumStr) {
                 $subIdx = (int)$subNumStr;
@@ -460,7 +461,23 @@ if (!function_exists('normalizeAnswerEntry')) {
                 $subAnswers[$subIdx] = $val;
             }
 
-            $subType = $allOx ? 'short_ox' : ($allSym ? 'objective' : 'subjective');
+            // 단답형 후보 판별: OX도 기호도 아닌 경우, 짧은 단어·숫자 형태인지 확인
+            if (!$allOx && !$allSym) {
+                foreach ($subAnswers as $ans) {
+                    $wordCount = str_word_count(mb_convert_encoding($ans, 'UTF-8', 'UTF-8'));
+                    $isShort = (mb_strlen($ans) <= 20 && $wordCount <= 2);
+                    if (!$isShort) {
+                        $allShortAnswerCandidate = false;
+                        break;
+                    }
+                }
+            }
+
+            $isSubjectiveCriteria = (bool)preg_match('/쓰시오|서술|설명|까닭|이유|u', $criteria);
+            $subType = $allOx ? 'short_ox'
+                : ($allSym ? 'objective'
+                : ($allShortAnswerCandidate && !$isSubjectiveCriteria ? 'short_answer' : 'subjective'));
+
             return buildSubItemEntry($qNum, $rawAnswerTrim, $score, $criteria, $subAnswers, $subType);
         }
 
@@ -578,7 +595,7 @@ if (!function_exists('buildSubItemEntry')) {
             'raw_answer'           => $rawAnswer,
             'normalized_answer'    => $rawAnswer,
             'type'                 => $type,
-            'sub_type'             => null,
+            'sub_type'             => $type,
             'score'                => $score,
             'criteria'             => $criteria,
             'is_sub_item'          => true,
@@ -663,7 +680,7 @@ if (!function_exists('bindAnswerKeyToRois')) {
                 $r['has_partial_score'] = $ansInfo['has_partial_score'] ?? false;
                 $r['criteria'] = $ansInfo['criteria'] ?? '';
                 $r['type'] = 'sub_item';
-                $r['sub_type'] = $ansInfo['sub_type'] ?? 'subjective';
+                $r['sub_type'] = $ansInfo['sub_type'];
             } else {
                 // 2. 단일 문항 바인딩 (객관식, 서술형, 단답/OX, 선잇기)
                 $r['answer'] = $ansInfo['normalized_answer'];
@@ -688,6 +705,9 @@ if (!function_exists('bindAnswerKeyToRois')) {
                     $r['sub_type'] = null;
                 } elseif ($ansInfo['type'] === 'objective') {
                     $r['type'] = 'objective';
+                    $r['sub_type'] = null;
+                } elseif ($ansInfo['type'] === 'short_answer') {
+                    $r['type'] = 'short_answer';
                     $r['sub_type'] = null;
                 }
             }
