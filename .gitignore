@@ -61,3 +61,6 @@ app/views/grading/roi_inspector.php
 
 # 작업용 임시 파일 확장자
 *.working
+
+# MCP Playwright 테스트 디렉터리
+.playwright-mcp/

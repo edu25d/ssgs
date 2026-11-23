@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root{font-family:Arial,"Noto Sans KR",sans-serif;color:#1c2923;background:#f2f3ed}*{box-sizing:border-box}body{margin:0;min-height:100vh;padding:24px;display:grid;place-items:center}.card{width:min(560px,100%);border:1px solid #dfe6dc;border-radius:20px;background:#fffefa;padding:26px;box-shadow:0 14px 38px rgba(28,46,35,.09)}.brand{display:flex;align-items:center;gap:10px;color:#173d32;font-size:15px;font-weight:750}.mark{display:grid;width:38px;height:38px;place-items:center;border-radius:12px;background:#173d32;color:#c9e98c;font-size:18px}.eyebrow{margin-top:22px;color:#527653;font-size:11px;font-weight:700;letter-spacing:.1em}.title{margin:7px 0;color:#1c2923;font-size:26px;letter-spacing:-.04em}.copy{margin:0;color:#758178;font-size:13px;line-height:1.65}.status{margin-top:18px;border-radius:11px;background:#f3f5ee;padding:13px;color:#647065;font-size:12px;line-height:1.6}.status.error{background:#fff0ed;color:#91483d}.status.ok{background:#edf5e8;color:#426a43}.details{display:grid;gap:9px;margin-top:16px}.details div{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #e9ede5;padding:9px 0;font-size:12px}.details span:first-child{color:#758178}.details strong{color:#344439;text-align:right}.note{margin-top:17px;border-left:3px solid #99b27b;background:#f6f8f1;padding:11px 12px;color:#697568;font-size:11px;line-height:1.6}.retry{margin-top:16px;min-height:42px;border:1px solid #dce4da;border-radius:10px;background:white;padding:0 14px;color:#36583d;font-weight:700;cursor:pointer}.retry:hover{background:#f7faf4}.loading{display:inline-block;width:13px;height:13px;border:2px solid #cbd6c7;border-top-color:#456d4c;border-radius:50%;vertical-align:-2px;animation:spin .7s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}@media(max-width:480px){body{padding:14px}.card{padding:21px}.title{font-size:23px}}
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="brand"><span class="mark" aria-hidden="true">↗</span><span>이어봄 · 교사 작업실</span></div>
+    <p class="eyebrow">GOOGLE ACCOUNT CHECK</p>
+    <h1 class="title" id="title">Google 계정을 확인하고 있어요</h1>
+    <p class="copy">교사 웹앱은 Google 계정으로 접속합니다. 승인된 담당 학급에만 접근할 수 있어요.</p>
+    <div class="status" id="status" role="status" aria-live="polite"><span class="loading" aria-hidden="true"></span> 계정과 담당 학급 권한을 확인 중입니다.</div>
+    <div class="details" id="details" hidden></div>
+    <div class="note">관리자는 통합 Google Sheet를 직접 확인합니다. 교사용 웹앱에는 배정된 학급 파일만 연결하고, 파일도 담당 교사 계정에만 공유합니다.</div>
+    <button class="retry" id="retry" type="button" hidden>다시 확인</button>
+  </main>
+  <script>
+    const title = document.getElementById("title");
+    const statusBox = document.getElementById("status");
+    const details = document.getElementById("details");
+    const retry = document.getElementById("retry");
+
+    function checkTeacher() {
+      retry.hidden = true;
+      details.hidden = true;
+      title.textContent = "Google 계정을 확인하고 있어요";
+      statusBox.className = "status";
+      statusBox.innerHTML = '<span class="loading" aria-hidden="true"></span> 계정과 담당 학급 권한을 확인 중입니다.';
+      google.script.run
+        .withSuccessHandler(showResult)
+        .withFailureHandler(() => showError("Apps Script가 계정을 확인하지 못했습니다. 교사용 웹앱을 ‘접속한 사용자로 실행’으로 배포했는지 확인해 주세요."))
+        .teacherGetContext();
+    }
+
+    function showResult(result) {
+      if (!result?.ok) {
+        showError(result?.message || "교사 권한을 확인할 수 없습니다.");
+        return;
+      }
+      title.textContent = "교사 계정이 확인됐어요";
+      statusBox.className = "status ok";
+      statusBox.textContent = "담당 학급 권한이 확인되었습니다.";
+      details.hidden = false;
+      const classes = result.teacher.classes.map((item) => `<div><span>담당 학급</span><strong>${escapeHtml(item.className)} · ${escapeHtml(item.workbookName)}</strong></div>`).join("");
+      details.innerHTML = `<div><span>Google 계정</span><strong>${escapeHtml(result.teacher.email)}</strong></div><div><span>담당 교사</span><strong>${escapeHtml(result.teacher.displayName)}</strong></div>${classes}`;
+    }
+
+    function showError(message) {
+      title.textContent = "교사 권한을 확인할 수 없어요";
+      statusBox.className = "status error";
+      statusBox.textContent = message;
+      retry.hidden = false;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
+    }
+
+    retry.addEventListener("click", checkTeacher);
+    checkTeacher();
+  </script>
+</body>
+</html>
