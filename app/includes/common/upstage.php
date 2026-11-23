@@ -90,7 +90,7 @@ if (!function_exists('extractRoisFromUpstageData')) {
         foreach ($elements as $el) {
             $cat = $el['category'] ?? '';
             $html = $el['content']['html'] ?? '';
-            $hasBokiText = (bool)preg_match('/<보기>|\[보기\]|\(보기\)/u', $html);
+            $hasBokiText = (bool)@preg_match('/<보기>|\[보기\]|\(보기\)/u', $html);
             // [수정 A] table도 <보 기> 라벨 없이 category만으로 등록 — 지문/보기 상자 누락 방지
             $isBoxCat = ($cat === 'box') || ($cat === 'table');
 
@@ -145,7 +145,7 @@ if (!function_exists('extractRoisFromUpstageData')) {
             $cleanText = html_entity_decode($cleanText, ENT_QUOTES, 'UTF-8');
 
             // 문항 시작 패턴: "1 ", "1. ", "1) ", "1번 " 등
-            if (preg_match('/^\s*(\d{1,2})\s*([\.|\s|\)|번]|\s*$)/u', $cleanText, $m)) {
+            if (@preg_match('/^\s*(\d{1,2})\s*([\.|\s|\)|번]|\s*$)/u', $cleanText, $m)) {
                 $qNum = (int)$m[1];
                 if ($qNum >= 1 && $qNum <= 100) {
                     $coords = $el['coordinates'] ?? [];
@@ -255,15 +255,15 @@ if (!function_exists('extractRoisFromUpstageData')) {
                 $fHtml = $followEl['content']['html'] ?? '';
                 $fText = trim(strip_tags($fHtml));
                 $fText = html_entity_decode($fText, ENT_QUOTES, 'UTF-8');
-                if (preg_match('/^\s*\d{1,2}\s*[\.|\s|\)|번]/u', $fText)) break;
+                if (@preg_match('/^\s*\d{1,2}\s*[\.|\s|\)|번]/u', $fText)) break;
                 $fullQText .= ' ' . $fText;
             }
 
-            $isMatchingLineQuestion = (bool)preg_match('/선\s*으로|선\s*을\s*그어|선\s*잇기|선\s*으\s*로|연결\s*(?:하시오|해\s*보|하세요|하기)|(?:바르게|알맞게|알맞은\s*것끼리|관련\s*있는\s*것끼리)\s*(?:선\s*으로\s*)?연결|(?:바르게|알맞게|찾아)\s*(?:선\s*으로\s*)?이[으어]|이어\s*보(?:시오|세요)?|이으\s*(?:시오|세요)/u', $fullQText);
-            $hasSubjectiveKeywords = (bool)preg_match('/쓰시오|서술|설명하시오|바르게\s*고쳐|까닭|이유/u', $fullQText);
+            $isMatchingLineQuestion = (bool)@preg_match('/선\s*으로|선\s*을\s*그어|선\s*잇기|선\s*으\s*로|연결\s*(?:하시오|해\s*보|하세요|하기)|(?:바르게|알맞게|알맞은\s*것끼리|관련\s*있는\s*것끼리)\s*(?:선\s*으로\s*)?연결|(?:바르게|알맞게|찾아)\s*(?:선\s*으로\s*)?이[으어]|이어\s*보(?:시오|세요)?|이으\s*(?:시오|세요)/u', $fullQText);
+            $hasSubjectiveKeywords = (bool)@preg_match('/쓰시오|서술|설명하시오|바르게\s*고쳐|까닭|이유/u', $fullQText);
 
             // 단답형 후보: 짧은 단어·숫자·O/X 기입형을 1차 유형으로 분류하기 위한 감지
-            $isShortAnswerCandidate = (bool)preg_match(
+            $isShortAnswerCandidate = (bool)@preg_match(
                 '/(?:단\s*어(?:를\s*)?쓰|낱\s*말(?:을\s*)?쓰|한\s*마디(?:로)?\s*쓰|짧은\s*답|숫자를\s*쓰|수를\s*쓰|측정값을\s*쓰|값을\s*쓰|한\s*단어|알맞은\s*말(?:을\s*)?쓰|'
                 . '(?:\(\s*\))?\s*(?:안에|에)\s*쓰|괄호\s*안|괄호\s*속에\s*쓰|'
                 . '(?:○[\s\x{25CB}]?\s*|✕[\s\x{2717}]?\s*|X[\s\x{2717}]?\s*|x[\s\x{2717}]?\s*)?(?:표|기|답|표시|체크|동그라미|O|X)'
@@ -273,19 +273,19 @@ if (!function_exists('extractRoisFromUpstageData')) {
             );
 
             // O/X형 단답형과 주관식(설명·까닭·서술)을 분리하기 위해 O/X 지표만 있는 경우 우선 단답형으로 본다.
-            $hasOxStyleOnly = (bool)preg_match(
+            $hasOxStyleOnly = (bool)@preg_match(
                 '/(?:○[\s\x{25CB}]?\s*|✕[\s\x{2717}]?\s*|X[\s\x{2717}]?\s*|x[\s\x{2717}]?\s*|O[\s\x{25CB}]?\s*|체크|동그라미)[\s\x{2003}]*'
                 . '(?:표|기|답|표시|체크|O|X)/u',
                 $fullQText
             ) && !$hasSubjectiveKeywords;
 
-            $isSymbolType = (bool)preg_match('/기호[를|로]|번호[를|로]|알맞은\s*기호/u', $fullQText) && !preg_match('/○표|○\s*표|V표|v표|체크|동그라미|u', $fullQText);
+            $isSymbolType = (bool)@preg_match('/기호[를|로]|번호[를|로]|알맞은\s*기호/u', $fullQText) && !@preg_match('/○표|○\s*표|V표|v표|체크|동그라미|u', $fullQText);
 
             // [수정 D 확장] 단답형 키워드가 있으면 '쓰시오'를 예외적으로 허용
             // '측정값을 쓰시오'처럼 단답형 지시 + '쓰시오'가 공존하는 경우 단답형으로 분류
             // 단, '서술', '설명하시오', '까닭', '이유' 등 진짜 주관식 키워드가 함께 있으면 주관식 유지
             if ($isShortAnswerCandidate && $hasSubjectiveKeywords) {
-                $hasNonWriteSubjectiveKeywords = (bool)preg_match('/서술|설명하시오|바르게\s*고쳐|까닭|이유/u', $fullQText);
+                $hasNonWriteSubjectiveKeywords = (bool)@preg_match('/서술|설명하시오|바르게\s*고쳐|까닭|이유/u', $fullQText);
                 if (!$hasNonWriteSubjectiveKeywords) {
                     $isShortAnswer = true;
                 }
@@ -467,7 +467,7 @@ if (!function_exists('extractRoisFromUpstageData')) {
             // 순수 서술형 문항(소문항 키워드 없고 발문 괄호도 없는 경우) 및 선잇기 문항은 괄호 매칭 우회하여 다음 문항 괄호 탈취 방지
             $hasHeadingBracket = (mb_strpos($q['cleanText'], '(') !== false && mb_strpos($q['cleanText'], ')') !== false)
                               || (mb_substr($q['cleanText'], -1) === '(');
-            $hasSubKeywords = (bool)preg_match('/각각|모두|○표|○\s*표|두\s*가지|짝\s*지|기호|번호/u', $fullQText);
+            $hasSubKeywords = (bool)@preg_match('/각각|모두|○표|○\s*표|두\s*가지|짝\s*지|기호|번호/u', $fullQText);
             $isPureSubjectiveEssay = $isSubjective && !$hasHeadingBracket && !$hasSubKeywords;
 
             $candidateBrackets = ($isMatchingLineQuestion || $isPureSubjectiveEssay) ? [] : $pageBracketsList;
@@ -508,9 +508,9 @@ if (!function_exists('extractRoisFromUpstageData')) {
                     // [규칙 2] 괄호 내부 기인쇄 텍스트 검사 (insideText가 ㉠, ㉡ 등 인쇄 기호인 경우)
                     $bText = trim($b['text'] ?? '');
                     $isNonEmptyBracket = false;
-                    if ($bText !== '' && preg_match('/[\(\（]\s*([가-힣a-zA-Z0-9㉠-㉭①-⑳]+)\s*[\)\）]/u', $bText, $mInside)) {
+                    if ($bText !== '' && @preg_match('/[\(\（]\s*([가-힣a-zA-Z0-9㉠-㉭①-⑳]+)\s*[\)\）]/u', $bText, $mInside)) {
                         $insideStr = trim($mInside[1]);
-                        if (!empty($insideStr) && !preg_match('/^[\s\.\·\-\_]+$/u', $insideStr)) {
+                        if (!empty($insideStr) && !@preg_match('/^[\s.\·\-\_]+$/u', $insideStr)) {
                             $isNonEmptyBracket = true;
                         }
                     }
@@ -726,10 +726,10 @@ if (!function_exists('extractRoisFromUpstageData')) {
                     $fText = html_entity_decode($fText, ENT_QUOTES, 'UTF-8');
 
                     // [Q8, Q17 해결] '(' 와 ')' 가 두 개 연속된 요소로 나뉜 경우 결합
-                    if (preg_match('/^\s*[\(\（]\s*$/u', $fText) && ($k + 1 < $lookAheadLimit)) {
+                    if (@preg_match('/^\s*[\(\（]\s*$/u', $fText) && ($k + 1 < $lookAheadLimit)) {
                         $nextEl = $elements[$k + 1];
                         $nText = trim(strip_tags($nextEl['content']['html'] ?? ''));
-                        if (preg_match('/^\s*[\)\）]\s*$/u', $nText)) {
+                        if (@preg_match('/^\s*[\)\）]\s*$/u', $nText)) {
                             $leftXs = array_column($followEl['coordinates'] ?? [], 'x');
                             $rightXs = array_column($nextEl['coordinates'] ?? [], 'x');
                             $ys = array_column($followEl['coordinates'] ?? [], 'y');
@@ -749,7 +749,7 @@ if (!function_exists('extractRoisFromUpstageData')) {
                     }
 
                     // 단일 요소 내 괄호 ( )
-                    if (preg_match('/[\(\（]\s*[\)\）]/u', $fText)) {
+                    if (@preg_match('/[\(\（]\s*[\)\）]/u', $fText)) {
                         $fCoords = $followEl['coordinates'] ?? [];
                         if (!empty($fCoords)) {
                             $fxs = array_column($fCoords, 'x');
