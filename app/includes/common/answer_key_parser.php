@@ -473,7 +473,7 @@ if (!function_exists('normalizeAnswerEntry')) {
                 }
             }
 
-            $isSubjectiveCriteria = (bool)preg_match('/쓰시오|서술|설명|까닭|이유|u', $criteria);
+            $isSubjectiveCriteria = (bool)preg_match('/쓰시오|서술|설명|까닭|이유/u', $criteria);
             $subType = $allOx ? 'short_ox'
                 : ($allSym ? 'objective'
                 : ($allShortAnswerCandidate && !$isSubjectiveCriteria ? 'short_answer' : 'subjective'));
@@ -629,7 +629,9 @@ if (!function_exists('bindAnswerKeyToRois')) {
         $collapsedRois = [];
         foreach ($groupedRois as $qNum => $qGroup) {
             $ansInfo = $parsedAnswers[$qNum] ?? null;
-            if ($ansInfo && $ansInfo['type'] === 'matching_line' && count($qGroup) > 1) {
+            if ($ansInfo && !($ansInfo['is_sub_item'] ?? true) && count($qGroup) > 1) {
+                // [수정 B] matching_line뿐 아니라 정답표가 단일 문항(is_sub_item=false)인데
+                // 시험지 ROI가 여러 개로 쪼개진 모든 유형에 대해 첫 대표 ROI만 남김
                 $first = $qGroup[0];
                 $minX = 999999; $minY = 999999; $maxX = 0; $maxY = 0;
                 foreach ($qGroup as $item) {
@@ -646,8 +648,8 @@ if (!function_exists('bindAnswerKeyToRois')) {
 
                 $first['sub_id'] = null;
                 $first['display_num'] = (string)$qNum;
-                $first['type'] = 'matching_line';
-                $first['sub_type'] = 'matching_line';
+                $first['type'] = $ansInfo['type'] ?? $first['type'];
+                $first['sub_type'] = $ansInfo['type'] ?? $first['sub_type'];
                 $first['ans_roi'] = $mergedAnsRoi;
                 unset($first['ans_rois']);
                 $collapsedRois[] = $first;

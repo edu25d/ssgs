@@ -91,7 +91,8 @@ if (!function_exists('extractRoisFromUpstageData')) {
             $cat = $el['category'] ?? '';
             $html = $el['content']['html'] ?? '';
             $hasBokiText = (bool)preg_match('/<보기>|\[보기\]|\(보기\)/u', $html);
-            $isBoxCat = ($cat === 'box') || ($cat === 'table' && $hasBokiText);
+            // [수정 A] table도 <보 기> 라벨 없이 category만으로 등록 — 지문/보기 상자 누락 방지
+            $isBoxCat = ($cat === 'box') || ($cat === 'table');
 
             if ($isBoxCat || $hasBokiText) {
                 $elPage = (int)($el['page'] ?? 1);
@@ -263,7 +264,7 @@ if (!function_exists('extractRoisFromUpstageData')) {
 
             // 단답형 후보: 짧은 단어·숫자·O/X 기입형을 1차 유형으로 분류하기 위한 감지
             $isShortAnswerCandidate = (bool)preg_match(
-                '/(?:단\s*어(?:를\s*)?쓰|낱\s*말(?:을\s*)?쓰|한\s*마디(?:로)?\s*쓰|짧은\s*답|숫자를\s*쓰|수를\s*쓰|한\s*단어|알맞은\s*말(?:을\s*)?쓰|'
+                '/(?:단\s*어(?:를\s*)?쓰|낱\s*말(?:을\s*)?쓰|한\s*마디(?:로)?\s*쓰|짧은\s*답|숫자를\s*쓰|수를\s*쓰|측정값을\s*쓰|값을\s*쓰|한\s*단어|알맞은\s*말(?:을\s*)?쓰|'
                 . '(?:\(\s*\))?\s*(?:안에|에)\s*쓰|괄호\s*안|괄호\s*속에\s*쓰|'
                 . '(?:○[\s\x{25CB}]?\s*|✕[\s\x{2717}]?\s*|X[\s\x{2717}]?\s*|x[\s\x{2717}]?\s*)?(?:표|기|답|표시|체크|동그라미|O|X)'
                 . '|O[\s\x{25CB}]?\s*/\s*✕[\s\x{2717}]?\s*|○[\s\x{25CB}]?\s*/\s*✕[\s\x{2717}]?\s*|'

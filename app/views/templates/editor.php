@@ -1,4 +1,12 @@
 <?php
+// ============================================================================
+// _FIX_VERIFIED_202611231905 — loadPage: img.onload/img.onerror를 img.src보다
+// 먼저 부착하여 브라우저 캐시 이미지에서도 정상 로드되도록 수정 (Race Condition fix)
+// ============================================================================
+// OPcache timestamp 강제 변경용 주석 블록 (파일 수정 시간 갱신 목적)
+// 이 주석은 에디터 기능에는 영향을 주지 않으며, 서버 OPcache가 이전 버전의
+// 바이트코드를 계속 서빙하는 문제를 해결하기 위해 file mtime을 변경합니다.
+// ============================================================================
 
 /**
 
@@ -10,6 +18,10 @@
 
 
 
+// _SIG_v2_20261121230000 — OPcache 강제 갱신 마커
+if (function_exists('opcache_invalidate')) {
+    opcache_invalidate(__FILE__, true);
+}
 require_once dirname(__DIR__, 2) . '/config/db.php';
 
 require_once APP_ROOT . '/includes/common/auth.php';
@@ -1982,8 +1994,6 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
                 const img = new Image();
 
-                img.src = page.image_path;
-
                 img.onload = () => {
 
                     pageImages[idx] = img;
@@ -2001,6 +2011,8 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
                     showToast(`⚠️ ${page.page_num || (idx + 1)}쪽 이미지를 불러오지 못했습니다. 경로를 확인해주세요.`, 5000);
 
                 };
+
+                img.src = page.image_path;
 
             }
 
@@ -2774,8 +2786,6 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
                         rois.splice(insertPos, 0, newSub);
 
-                    }
-
                     // ponytail: 연속 추가 모드 유지 (휠 또는 ESC로 종료 시까지 대기)
 
                     reindexRois();
@@ -2962,36 +2972,13 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
             const text = ansText.trim();
 
-            let pairs = [];
+            const pairs = [];
 
-            const tokens = text.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean);
-
-            if (tokens.length > 1) {
-
-                tokens.forEach(tok => {
-
-                    const m = tok.match(/^[\(（]?(\d+)[\)）]?[\s*\-➔→=~:>]*([㉠-㉭ㄱ-ㅎ가-힣\w]+)$/u);
-
-                    if (m) pairs.push({ from: '(' + m[1] + ')', to: m[2], raw: tok });
-
-                });
-
-            }
-
-            if (pairs.length < 2) {
-
-                pairs = [];
-
-                const regex = /[\(（]?(\d+)[\)）]?[\s*\-➔→=~:>]+([㉠-㉭ㄱ-ㅎ가-힣\w]+)/gu;
-
-                let m;
-
-                while ((m = regex.exec(text)) !== null) {
-
-                    pairs.push({ from: '(' + m[1] + ')', to: m[2], raw: m[0] });
-
-                }
-
+            // [수정 E] 줄바꿈 분리 없이 텍스트 전체에서 글로벌 매칭 — 한 줄 복수 쌍도 개별 추출
+            const regex = /[\(（]?(\d+)[\)）]?[\s*\-➔→=~:>]*([㉠-㉭ㄱ-ㅎ가-힣\w]+)/gu;
+            let m;
+            while ((m = regex.exec(text)) !== null) {
+                pairs.push({ from: '(' + m[1] + ')', to: m[2], raw: m[0] });
             }
 
             return pairs;
@@ -3007,6 +2994,10 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
             // QUESTION TYPE SYSTEM 기준: type을 재변환하지 않고 그대로 표시한다.
             // 단답형/주관식 type 통일(short_answer/subjective) 이후이므로
             // type 값을 그대로 노출한다.
+            // [수정 C] 소문항은 r.type === 'sub_item'일 때 r.sub_type으로 실제 세부 유형 노출
+            if (r.type === 'sub_item') {
+                return r.sub_type || 'short_answer';
+            }
             return r.type || 'objective';
         }
 
@@ -5604,8 +5595,6 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
                         drawMatchingLinesOverlay(r, isSelected);
 
                     }
-
-                }
 
             });
 

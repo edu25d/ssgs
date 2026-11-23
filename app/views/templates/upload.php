@@ -1095,7 +1095,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // 컬럼 폭의 최소 35% 이상 가로선만 인정 (단어 밑줄, 분수선, 짧은 기호 배제)
                 const minLineLen = Math.round(W * 0.14);
                 const yStart = Math.round(H * 0.08); // 헤더(상단 8%) 제외
-                const yEnd = Math.round(H * 0.91);   // 풋터(하단 9%) 제외
+                // [수정 F] 하단 3번째 밑줄까지 포괄하도록 풋터 한계를 91% → 96%로 완화
+                const yEnd = Math.round(H * 0.96);
 
                 columns.forEach(col => {
                     const foundRuns = [];
