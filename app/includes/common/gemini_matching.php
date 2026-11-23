@@ -553,6 +553,18 @@ if (!function_exists('autoAnalyzeMatchingRoisServerSide')) {
 
             $gData = $geminiRes['data'];
 
+            // [DEBUG] 검증 4: Gemini 원본 응답 로깅
+            if (!empty($gData['source_dots']) || !empty($gData['target_dots'])) {
+                error_log(sprintf(
+                    "[DEBUG] Q%s Gemini 원본 응답 (검증4): direction=%s "
+                    . "source_dots=%s target_dots=%s",
+                    $r['display_num'],
+                    $gData['direction'] ?? 'N/A',
+                    json_encode($gData['source_dots'] ?? []),
+                    json_encode($gData['target_dots'] ?? [])
+                ));
+            }
+
             // Gemini 분석 결과 선잇기 문항이 아니라고 판별된 경우 (예: Q17 등 일반 기호형/서술형)
             if (isset($gData['is_matching']) && !$gData['is_matching']) {
                 imagedestroy($cropImg);
@@ -693,7 +705,48 @@ if (!function_exists('autoAnalyzeMatchingRoisServerSide')) {
 
             $normSourceDots = [];
 
-            foreach ($gData['source_dots'] ?? [] as $d) {
+            // [DEBUG] 검증 2: source_dots 좌표 변환 단계별 로깅
+            if (!empty($gData['source_dots'])) {
+                error_log(sprintf(
+                    "[DEBUG] Q%s source_dots 변환 (검증2): "
+                    . "dotDivisor=%.1f crop=(%d,%d,%d,%d) curAr=(%s)",
+                    $r['display_num'],
+                    $dotDivisor,
+                    $cropX, $cropY, $cropW, $cropH,
+                    json_encode($curAr)
+                ));
+                foreach ($gData['source_dots'] ?? [] as $sIdx => $d) {
+                    $origNX = (float)($d['norm_x'] ?? 0);
+                    $origNY = (float)($d['norm_y'] ?? 0);
+                    $dnx = max(0.0, min(1.0, $origNX / $dotDivisor));
+                    $dny = max(0.0, min(1.0, $origNY / $dotDivisor));
+                    $error_log_msg = sprintf(
+                        "  [source_dot[%d]] gemini_norm=(%.4f,%.4f) "
+                        . "dnx_before_snap=(%.4f,%.4f)",
+                        $sIdx, $origNX, $origNY, $dnx, $dny
+                    );
+                    if (!empty($cropImg)) {
+                        $snapped = snapDotToNearestDarkBulletInImage($cropImg, $dnx, $dny, $cropW, $cropH,
+                            (string)($gData['direction'] ?? 'vertical'), 'source');
+                        $dnx = $snapped['norm_x'];
+                        $dny = $snapped['norm_y'];
+                        $error_log_msg .= sprintf(
+                            " snap=(%.4f,%.4f) darkCount=%d",
+                            $snapped['norm_x'], $snapped['norm_y'],
+                            $snapped['darkCount'] ?? -1
+                        );
+                    }
+                    $absX = $cropX + $dnx * $cropW;
+                    $absY = $cropY + $dny * $cropH;
+                    $roiNormX = ($curAr['w'] > 0) ? max(0.0, min(1.0, ($absX - $curAr['x']) / $curAr['w'])) : $dnx;
+                    $roiNormY = ($curAr['h'] > 0) ? max(0.0, min(1.0, ($absY - $curAr['y']) / $curAr['h'])) : $dny;
+                    $error_log_msg .= sprintf(
+                        " abs=(%.1f,%.1f) roi_norm=(%.4f,%.4f)",
+                        $absX, $absY, $roiNormX, $roiNormY
+                    );
+                    error_log($error_log_msg);
+                }
+            }
                 $dnx = max(0.0, min(1.0, (float)($d['norm_x'] ?? 0) / $dotDivisor));
                 $dny = max(0.0, min(1.0, (float)($d['norm_y'] ?? 0) / $dotDivisor));
                 if (!empty($cropImg)) {
@@ -735,6 +788,42 @@ if (!function_exists('autoAnalyzeMatchingRoisServerSide')) {
 
 
             $normTargetDots = [];
+
+
+            // [DEBUG] 검증 2: target_dots 좌표 변환 단계별 로깅
+            if (!empty($gData['target_dots'])) {
+                foreach ($gData['target_dots'] ?? [] as $tIdx => $d) {
+                    $origNX = (float)($d['norm_x'] ?? 0);
+                    $origNY = (float)($d['norm_y'] ?? 0);
+                    $dnx = max(0.0, min(1.0, $origNX / $dotDivisor));
+                    $dny = max(0.0, min(1.0, $origNY / $dotDivisor));
+                    $error_log_msg = sprintf(
+                        "  [target_dot[%d]] gemini_norm=(%.4f,%.4f) "
+                        . "dnx_before_snap=(%.4f,%.4f)",
+                        $tIdx, $origNX, $origNY, $dnx, $dny
+                    );
+                    if (!empty($cropImg)) {
+                        $snapped = snapDotToNearestDarkBulletInImage($cropImg, $dnx, $dny, $cropW, $cropH,
+                            (string)($gData['direction'] ?? 'vertical'), 'target');
+                        $dnx = $snapped['norm_x'];
+                        $dny = $snapped['norm_y'];
+                        $error_log_msg .= sprintf(
+                            " snap=(%.4f,%.4f) darkCount=%d",
+                            $snapped['norm_x'], $snapped['norm_y'],
+                            $snapped['darkCount'] ?? -1
+                        );
+                    }
+                    $absX = $cropX + $dnx * $cropW;
+                    $absY = $cropY + $dny * $cropH;
+                    $roiNormX = ($curAr['w'] > 0) ? max(0.0, min(1.0, ($absX - $curAr['x']) / $curAr['w'])) : $dnx;
+                    $roiNormY = ($curAr['h'] > 0) ? max(0.0, min(1.0, ($absY - $curAr['y']) / $curAr['h'])) : $dny;
+                    $error_log_msg .= sprintf(
+                        " abs=(%.1f,%.1f) roi_norm=(%.4f,%.4f)",
+                        $absX, $absY, $roiNormX, $roiNormY
+                    );
+                    error_log($error_log_msg);
+                }
+            }
 
             foreach ($gData['target_dots'] ?? [] as $d) {
                 $dnx = max(0.0, min(1.0, (float)($d['norm_x'] ?? 0) / $dotDivisor));
@@ -811,4 +900,3 @@ if (!function_exists('autoAnalyzeMatchingRoisServerSide')) {
 
         return $analyzedCount;
     }
-}
