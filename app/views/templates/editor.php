@@ -4992,11 +4992,9 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
 
 
-            const sDots = (r.matching_info && Array.isArray(r.matching_info.source_dots)) ? r.matching_info.source_dots : [];
 
 
 
-            const tDots = (r.matching_info && Array.isArray(r.matching_info.target_dots)) ? r.matching_info.target_dots : [];
 
 
 
@@ -6422,11 +6420,9 @@ function renderMatchingCropPreviews() {
 
 
 
-                    const sDots = (r.matching_info && Array.isArray(r.matching_info.source_dots)) ? r.matching_info.source_dots : [];
 
 
 
-                    const tDots = (r.matching_info && Array.isArray(r.matching_info.target_dots)) ? r.matching_info.target_dots : [];
 
 
 
