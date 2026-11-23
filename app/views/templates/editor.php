@@ -3583,6 +3583,18 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
 
                 const resData = json.data;
+                // [Q16 DEBUG] Gemini API raw 응답 확인 — source_dots norm_x 문제 원인 추적
+                if (resData.source_dots && resData.source_dots.length > 0) {
+                    console.log('[Q16 DEBUG] Gemini raw source_dots:', JSON.stringify(
+                        resData.source_dots.map(d => ({ label: d.label, norm_x: d.norm_x, norm_y: d.norm_y })), null, 2
+                    ));
+                }
+                if (resData.target_dots && resData.target_dots.length > 0) {
+                    console.log('[Q16 DEBUG] Gemini raw target_dots:', JSON.stringify(
+                        resData.target_dots.map(d => ({ label: d.label, norm_x: d.norm_x, norm_y: d.norm_y })), null, 2
+                    ));
+                }
+
 
 
 
