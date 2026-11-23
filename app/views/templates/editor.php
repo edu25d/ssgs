@@ -4978,7 +4978,7 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
             const sDots = (r.matching_info && Array.isArray(r.matching_info.source_dots)) ? r.matching_info.source_dots : [];
             const tDots = (r.matching_info && Array.isArray(r.matching_info.target_dots)) ? r.matching_info.target_dots : [];
             const dotArrangement = detectDotArrangement(sDots, tDots, r);
-            const dir = (r.matching_info && r.matching_info.direction) ? r.matching_info.direction : ((r.matching_direction && r.matching_direction !== 'auto') ? r.matching_direction : ((r.ans_roi.h > r.ans_roi.w * 0.75) ? 'vertical' : 'horizontal'));
+            let dir = (r.matching_info && r.matching_info.direction) ? r.matching_info.direction : ((r.matching_direction && r.matching_direction !== 'auto') ? r.matching_direction : ((r.ans_roi.h > r.ans_roi.w * 0.75) ? 'vertical' : 'horizontal'));
             if (dotArrangement === 'vertical') dir = 'vertical';
             else if (dotArrangement === 'horizontal') dir = 'horizontal';
 
@@ -6402,7 +6402,7 @@ function renderMatchingCropPreviews() {
                     const sDots = (r.matching_info && Array.isArray(r.matching_info.source_dots)) ? r.matching_info.source_dots : [];
                     const tDots = (r.matching_info && Array.isArray(r.matching_info.target_dots)) ? r.matching_info.target_dots : [];
                     const dotArrangement = detectDotArrangement(sDots, tDots, r);
-                    const dir = (r.matching_info && r.matching_info.direction) ? r.matching_info.direction : ((r.matching_direction && r.matching_direction !== 'auto') ? r.matching_direction : ((ar.h > ar.w * 0.75) ? 'vertical' : 'horizontal'));
+                    let dir = (r.matching_info && r.matching_info.direction) ? r.matching_info.direction : ((r.matching_direction && r.matching_direction !== 'auto') ? r.matching_direction : ((ar.h > ar.w * 0.75) ? 'vertical' : 'horizontal'));
                     if (dotArrangement === 'vertical') dir = 'vertical';
                     else if (dotArrangement === 'horizontal') dir = 'horizontal';
 
