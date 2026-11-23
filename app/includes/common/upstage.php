@@ -281,8 +281,18 @@ if (!function_exists('extractRoisFromUpstageData')) {
 
             $isSymbolType = (bool)preg_match('/기호[를|로]|번호[를|로]|알맞은\s*기호/u', $fullQText) && !preg_match('/○표|○\s*표|V표|v표|체크|동그라미|u', $fullQText);
 
-            // 단답형 우선 판별: O/X 표시형, 단어/숫자 기입형이고 주관식 서술 키워드가 없으면 단답형으로 분류
-            $isShortAnswer = $isShortAnswerCandidate && !$hasSubjectiveKeywords;
+            // [수정 D 확장] 단답형 키워드가 있으면 '쓰시오'를 예외적으로 허용
+            // '측정값을 쓰시오'처럼 단답형 지시 + '쓰시오'가 공존하는 경우 단답형으로 분류
+            // 단, '서술', '설명하시오', '까닭', '이유' 등 진짜 주관식 키워드가 함께 있으면 주관식 유지
+            if ($isShortAnswerCandidate && $hasSubjectiveKeywords) {
+                $hasNonWriteSubjectiveKeywords = (bool)preg_match('/서술|설명하시오|바르게\s*고쳐|까닭|이유/u', $fullQText);
+                if (!$hasNonWriteSubjectiveKeywords) {
+                    $isShortAnswer = true;
+                }
+            }
+            if (!isset($isShortAnswer)) {
+                $isShortAnswer = $isShortAnswerCandidate && !$hasSubjectiveKeywords;
+            }
 
             if ($isSymbolType) {
                 // [Q12 해결] '기호를 쓰시오', '번호를 쓰시오'는 ㉠, 1 등을 적는 선택형이므로 객관식 [객] 분류

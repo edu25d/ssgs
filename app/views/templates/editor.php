@@ -3015,6 +3015,10 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
             if (getDisplayType(r) === 'matching_line') {
 
+                console.log('[Q16 DEBUG] handleAnswerInput', { idx, displayNum: r.display_num, answer: r.answer });
+                const previewPairs = parseMatchingPairs(r.answer);
+                console.log('[Q16 DEBUG] parseMatchingPairs 결과', { count: previewPairs.length, pairs: previewPairs });
+
                 const previewEl = document.getElementById(`matching-preview-${idx}`);
 
                 const pairs = parseMatchingPairs(r.answer);
@@ -3198,6 +3202,7 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
             r.matching_direction = dir;
 
             if (!r.matching_info) r.matching_info = {};
+            console.log('[Q16 DEBUG] Gemini 분석 완료', { displayNum: r.display_num, direction: r.matching_info.direction, source_dots_count: (r.matching_info.source_dots || []).length, target_dots_count: (r.matching_info.target_dots || []).length, resData_pairs_count: (resData.pairs || []).length });
 
             r.matching_info.direction = dir;
 
@@ -4914,6 +4919,7 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
 
             if (!r || !r.ans_roi) return;
+            console.log('[Q16 DEBUG] drawMatchingLinesOverlay 진입', { displayNum: r.display_num, answer: r.answer });
 
 
 
