@@ -3003,6 +3003,38 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
 
 
+        // 점 배치(2행 vs 2열) 판별 → 연결선 방향 결정 보조
+        // 용어 정의: 연결선의 방향 기준으로 horizontal/vertical 구분
+        //   - 2행 배치(위쪽 행 + 아래쪽 행) → 연결선 상하(세로) → 'vertical'
+        //   - 2열 배치(왼쪽 열 + 오른쪽 열) → 연결선 좌우(가로) → 'horizontal'
+        function detectDotArrangement(sDots, tDots, r) {
+            const toAbs = (d, ar) => ({
+                x: d.abs_x != null ? d.abs_x : (d.roi_norm_x != null ? d.roi_norm_x * ar.w + ar.x : 0),
+                y: d.abs_y != null ? d.abs_y : (d.roi_norm_y != null ? d.roi_norm_y * ar.h + ar.y : 0)
+            });
+            if (!sDots || !tDots || sDots.length < 2 || tDots.length < 2) return null;
+            const ar = r.ans_roi;
+            const sAbs = sDots.map(d => toAbs(d, ar));
+            const tAbs = tDots.map(d => toAbs(d, ar));
+            const sXRange = Math.max(...sAbs.map(p => p.x)) - Math.min(...sAbs.map(p => p.x));
+            const sYRange = Math.max(...sAbs.map(p => p.y)) - Math.min(...sAbs.map(p => p.y));
+            const tXRange = Math.max(...tAbs.map(p => p.x)) - Math.min(...tAbs.map(p => p.x));
+            const tYRange = Math.max(...tAbs.map(p => p.y)) - Math.min(...tAbs.map(p => p.y));
+            const isColumnLayout = (sXRange < sYRange && tXRange < tYRange && sXRange < 30 && tXRange < 30);
+            const isRowLayout = (sYRange < sXRange && tYRange < tXRange && sYRange < 30 && tYRange < 30);
+            if (isColumnLayout) return 'horizontal';
+            if (isRowLayout) return 'vertical';
+            const sCx = sAbs.reduce((a, b) => a + b.x, 0) / sAbs.length;
+            const sCy = sAbs.reduce((a, b) => a + b.y, 0) / sAbs.length;
+            const tCx = tAbs.reduce((a, b) => a + b.x, 0) / tAbs.length;
+            const tCy = tAbs.reduce((a, b) => a + b.y, 0) / tAbs.length;
+            const dx = Math.abs(tCx - sCx);
+            const dy = Math.abs(tCy - sCy);
+            if (dy > dx) return 'vertical';
+            if (dx > dy) return 'horizontal';
+            return null;
+        }
+
         function handleAnswerInput(idx, val) {
 
             const r = rois[idx];
@@ -4943,7 +4975,12 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
 
 
+            const sDots = (r.matching_info && Array.isArray(r.matching_info.source_dots)) ? r.matching_info.source_dots : [];
+            const tDots = (r.matching_info && Array.isArray(r.matching_info.target_dots)) ? r.matching_info.target_dots : [];
+            const dotArrangement = detectDotArrangement(sDots, tDots, r);
             const dir = (r.matching_info && r.matching_info.direction) ? r.matching_info.direction : ((r.matching_direction && r.matching_direction !== 'auto') ? r.matching_direction : ((r.ans_roi.h > r.ans_roi.w * 0.75) ? 'vertical' : 'horizontal'));
+            if (dotArrangement === 'vertical') dir = 'vertical';
+            else if (dotArrangement === 'horizontal') dir = 'horizontal';
 
 
 
@@ -6364,7 +6401,12 @@ function renderMatchingCropPreviews() {
 
 
 
+                    const sDots = (r.matching_info && Array.isArray(r.matching_info.source_dots)) ? r.matching_info.source_dots : [];
+                    const tDots = (r.matching_info && Array.isArray(r.matching_info.target_dots)) ? r.matching_info.target_dots : [];
+                    const dotArrangement = detectDotArrangement(sDots, tDots, r);
                     const dir = (r.matching_info && r.matching_info.direction) ? r.matching_info.direction : ((r.matching_direction && r.matching_direction !== 'auto') ? r.matching_direction : ((ar.h > ar.w * 0.75) ? 'vertical' : 'horizontal'));
+                    if (dotArrangement === 'vertical') dir = 'vertical';
+                    else if (dotArrangement === 'horizontal') dir = 'horizontal';
 
 
 
