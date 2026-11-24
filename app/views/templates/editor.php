@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // ============================================================================
 // _FIX_VERIFIED_202611231905 — loadPage: img.onload/img.onerror를 img.src보다
 // 먼저 부착하여 브라우저 캐시 이미지에서도 정상 로드되도록 수정 (Race Condition fix)
@@ -3009,30 +3009,34 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
         //   - 2열 배치(왼쪽 열 + 오른쪽 열) → 연결선 좌우(가로) → 'horizontal'
         function detectDotArrangement(sDots, tDots, r) {
             const toAbs = (d, ar) => ({
-                x: d.abs_x != null ? d.abs_x : (d.roi_norm_x != null ? d.roi_norm_x * ar.w + ar.x : 0),
-                y: d.abs_y != null ? d.abs_y : (d.roi_norm_y != null ? d.roi_norm_y * ar.h + ar.y : 0)
+                x: d.abs_x != null ? d.abs_x : (d.roi_norm_x != null && ar ? d.roi_norm_x * ar.w + ar.x : 0),
+                y: d.abs_y != null ? d.abs_y : (d.roi_norm_y != null && ar ? d.roi_norm_y * ar.h + ar.y : 0)
             });
             if (!sDots || !tDots || sDots.length < 2 || tDots.length < 2) return null;
-            const ar = r.ans_roi;
+            const ar = r ? r.ans_roi : null;
             const sAbs = sDots.map(d => toAbs(d, ar));
             const tAbs = tDots.map(d => toAbs(d, ar));
             const sXRange = Math.max(...sAbs.map(p => p.x)) - Math.min(...sAbs.map(p => p.x));
             const sYRange = Math.max(...sAbs.map(p => p.y)) - Math.min(...sAbs.map(p => p.y));
             const tXRange = Math.max(...tAbs.map(p => p.x)) - Math.min(...tAbs.map(p => p.x));
             const tYRange = Math.max(...tAbs.map(p => p.y)) - Math.min(...tAbs.map(p => p.y));
-            const isColumnLayout = (sXRange < sYRange && tXRange < tYRange && sXRange < 30 && tXRange < 30);
-            const isRowLayout = (sYRange < sXRange && tYRange < tXRange && sYRange < 30 && tYRange < 30);
-            if (isColumnLayout) return 'horizontal';
-            if (isRowLayout) return 'vertical';
+
+            // 각 그룹 내부 점들의 분포 (비율 기반)
+            const isColumnLayout = (sXRange < sYRange * 0.6 && tXRange < tYRange * 0.6);
+            const isRowLayout = (sYRange < sXRange * 0.6 && tYRange < tXRange * 0.6);
+            if (isColumnLayout && !isRowLayout) return 'horizontal';
+            if (isRowLayout && !isColumnLayout) return 'vertical';
+
+            // 그룹 간 중심점(centroid) 거리 비교
             const sCx = sAbs.reduce((a, b) => a + b.x, 0) / sAbs.length;
             const sCy = sAbs.reduce((a, b) => a + b.y, 0) / sAbs.length;
             const tCx = tAbs.reduce((a, b) => a + b.x, 0) / tAbs.length;
             const tCy = tAbs.reduce((a, b) => a + b.y, 0) / tAbs.length;
             const dx = Math.abs(tCx - sCx);
             const dy = Math.abs(tCy - sCy);
-            if (dy > dx) return 'vertical';
-            if (dx > dy) return 'horizontal';
-            return null;
+            if (dy > dx * 1.2) return 'vertical';
+            if (dx > dy * 1.2) return 'horizontal';
+            return dy >= dx ? 'vertical' : 'horizontal';
         }
 
         function handleAnswerInput(idx, val) {
@@ -3224,24 +3228,15 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
         // 선 잇기 방향 설정 (세로형 / 가로형)
 
         function setMatchingDirection(idx, dir) {
-
             const r = rois[idx];
-
             if (!r) return;
-
             pushUndoState();
-
             r.matching_direction = dir;
-
             if (!r.matching_info) r.matching_info = {};
-            console.log('[Q16 DEBUG] Gemini 분석 완료', { displayNum: r.display_num, direction: r.matching_info.direction, source_dots_count: (r.matching_info.source_dots || []).length, target_dots_count: (r.matching_info.target_dots || []).length, resData_pairs_count: (resData.pairs || []).length });
-
             r.matching_info.direction = dir;
-
+            console.log('[Matching] Direction updated', { idx, displayNum: r.display_num, direction: dir });
             draw();
-
             renderSidebar();
-
         }        // 다양한 AI 반환 스케일(0.0~1.0, 0~100%, 0~1000)을 [0.0, 1.0]으로 정규화하는 안전 헬퍼
 
 
@@ -3326,7 +3321,9 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
 
 
-            const pageImg = pageImages[activePageIndex];
+                        const pageImg = (targetPageIdx >= 0 && pageImages[targetPageIdx] && pageImages[targetPageIdx].complete)
+                ? pageImages[targetPageIdx]
+                : pageImages[activePageIndex];
 
 
 
@@ -3630,362 +3627,90 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
 
 
-                pushUndoState();                // 1. matching_box가 감지되었으면 ans_roi를 통합 영역으로 자동 업데이트 (스케일 자동 판정 및 Strict Clamping)
+                pushUndoState();
 
-
-
+                // 1. matching_box가 감지되었으면 ans_roi를 통합 영역으로 자동 업데이트 (normCoord 독립 정규화 적용)
                 if (resData.matching_box && typeof resData.matching_box.ymin !== 'undefined') {
-
-
-
                     const box = resData.matching_box;
+                    let mYmin = normCoord(box.ymin);
+                    let mXmin = normCoord(box.xmin);
+                    let mYmax = normCoord(box.ymax);
+                    let mXmax = normCoord(box.xmax);
 
-
-
-                    const rawYmin = parseFloat(box.ymin || 0);
-
-
-
-                    const rawXmin = parseFloat(box.xmin || 0);
-
-
-
-                    const rawYmax = parseFloat(box.ymax || 1);
-
-
-
-                    const rawXmax = parseFloat(box.xmax || 1);
-
-
-
-
-
-
-
-                    const maxCoord = Math.max(rawYmin, rawXmin, rawYmax, rawXmax);
-
-
-
-                    let boxDivisor = 1.0;
-
-
-
-                    if (maxCoord > 100.0) {
-
-
-
-                        boxDivisor = 1000.0;
-
-
-
-                    } else if (maxCoord > 1.0) {
-
-
-
-                        boxDivisor = 100.0;
-
-
-
-                    }
-
-
-
-
-
-
-
-                    let mYmin = Math.max(0.0, Math.min(1.0, rawYmin / boxDivisor));
-
-
-
-                    let mXmin = Math.max(0.0, Math.min(1.0, rawXmin / boxDivisor));
-
-
-
-                    let mYmax = Math.max(0.0, Math.min(1.0, rawYmax / boxDivisor));
-
-
-
-                    let mXmax = Math.max(0.0, Math.min(1.0, rawXmax / boxDivisor));
-
-
-
-
-
-
+                    // 감지된 점들이 matching_box 바깥에 있어 클램핑되는 현상 방지: 점들을 모두 포함하도록 박스 확장 (2% 마진)
+                    const allDots = [...(resData.source_dots || []), ...(resData.target_dots || [])];
+                    allDots.forEach(d => {
+                        const dx = normCoord(d.norm_x);
+                        const dy = normCoord(d.norm_y);
+                        if (dx > 0) {
+                            mXmin = Math.min(mXmin, Math.max(0.0, dx - 0.02));
+                            mXmax = Math.max(mXmax, Math.min(1.0, dx + 0.02));
+                        }
+                        if (dy > 0) {
+                            mYmin = Math.min(mYmin, Math.max(0.0, dy - 0.02));
+                            mYmax = Math.max(mYmax, Math.min(1.0, dy + 0.02));
+                        }
+                    });
 
                     if (mXmax <= mXmin) { mXmin = 0.05; mXmax = 0.95; }
-
-
-
                     if (mYmax <= mYmin) { mYmin = 0.15; mYmax = 0.95; }
 
-
-
-
-
-
-
                     const rawX = Math.round(cropX + mXmin * cropW);
-
-
-
                     const rawY = Math.round(cropY + mYmin * cropH);
-
-
-
                     const rawW = Math.round((mXmax - mXmin) * cropW);
-
-
-
                     const rawH = Math.round((mYmax - mYmin) * cropH);
 
-
-
-
-
-
-
                     // 단(Column) 경계 및 다음 문항 침범 엄격 클램핑 (Strict Clamping)
-
-
-
                     const colRight = cropX + cropW;
-
-
-
                     const newX = Math.max(cropX, Math.min(colRight - 40, rawX));
-
-
-
                     const newW = Math.max(40, Math.min(colRight - newX, rawW));
-
-
-
-
-
-
-
                     const newY = Math.max(cropY, Math.min(bottomY - 30, rawY));
-
-
-
                     const newH = Math.max(40, Math.min(bottomY - newY, rawH));
 
-
-
-
-
-
-
                     r.ans_roi.x = newX;
-
-
-
                     r.ans_roi.y = newY;
-
-
-
                     r.ans_roi.w = newW;
-
-
-
                     r.ans_roi.h = newH;
-
-
-
                 }
-
-
-
-
-
-
 
                 // 2. dot들을 r.ans_roi 기준 정규화 좌표(0.0~1.0)로 변환하여 matching_info에 저장
-
-
-
-                const allDots = [...(resData.source_dots || []), ...(resData.target_dots || [])];
-
-
-
-                let maxDotCoord = 0.0;
-
-
-
-                allDots.forEach(d => {
-
-
-
-                    maxDotCoord = Math.max(maxDotCoord, parseFloat(d.norm_x || 0), parseFloat(d.norm_y || 0));
-
-
-
-                });
-
-
-
-                let dotDivisor = 1.0;
-
-
-
-                if (maxDotCoord > 100.0) {
-
-
-
-                    dotDivisor = 1000.0;
-
-
-
-                } else if (maxDotCoord > 1.0) {
-
-
-
-                    dotDivisor = 100.0;
-
-
-
-                }
-
-
-
-
-
-
-
                 const curAr = r.ans_roi;
-
-
-
                 const normSourceDots = (resData.source_dots || []).map(d => {
-
-
-
-                    const dnx = Math.max(0.0, Math.min(1.0, parseFloat(d.norm_x || 0) / dotDivisor));
-
-
-
-                    const dny = Math.max(0.0, Math.min(1.0, parseFloat(d.norm_y || 0) / dotDivisor));
-
-
-
+                    const dnx = normCoord(d.norm_x);
+                    const dny = normCoord(d.norm_y);
                     const absX = cropX + dnx * cropW;
-
-
-
                     const absY = cropY + dny * cropH;
-
-
-
                     const roiNormX = (curAr.w > 0) ? Math.max(0.0, Math.min(1.0, (absX - curAr.x) / curAr.w)) : dnx;
-
-
-
                     const roiNormY = (curAr.h > 0) ? Math.max(0.0, Math.min(1.0, (absY - curAr.y) / curAr.h)) : dny;
-
-
-
-                    return {
-
-
-
+                    const dotObj = {
                         label: d.label || '',
-
-
-
                         abs_x: absX,
-
-
-
                         abs_y: absY,
-
-
-
                         roi_norm_x: roiNormX,
-
-
-
                         roi_norm_y: roiNormY,
-
-
-
                         item_box: d.item_box || null
-
-
-
                     };
-
-
-
+                    snapDotToNearestDarkBullet(r, dotObj);
+                    return dotObj;
                 });
-
-
-
-
-
-
 
                 const normTargetDots = (resData.target_dots || []).map(d => {
-
-
-
-                    const dnx = Math.max(0.0, Math.min(1.0, parseFloat(d.norm_x || 0) / dotDivisor));
-
-
-
-                    const dny = Math.max(0.0, Math.min(1.0, parseFloat(d.norm_y || 0) / dotDivisor));
-
-
-
+                    const dnx = normCoord(d.norm_x);
+                    const dny = normCoord(d.norm_y);
                     const absX = cropX + dnx * cropW;
-
-
-
                     const absY = cropY + dny * cropH;
-
-
-
                     const roiNormX = (curAr.w > 0) ? Math.max(0.0, Math.min(1.0, (absX - curAr.x) / curAr.w)) : dnx;
-
-
-
                     const roiNormY = (curAr.h > 0) ? Math.max(0.0, Math.min(1.0, (absY - curAr.y) / curAr.h)) : dny;
-
-
-
-                    return {
-
-
-
+                    const dotObj = {
                         label: d.label || '',
-
-
-
                         abs_x: absX,
-
-
-
                         abs_y: absY,
-
-
-
                         roi_norm_x: roiNormX,
-
-
-
                         roi_norm_y: roiNormY,
-
-
-
                         item_box: d.item_box || null
-
-
-
                     };
-
-
-
+                    snapDotToNearestDarkBullet(r, dotObj);
+                    return dotObj;
                 });
 
 
@@ -4180,226 +3905,173 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
 
 
+                // 원문자 및 한글 자음, 괄호 등 라벨 정규화 헬퍼 (SSOT)
+        function normalizeMatchingLabel(s) {
+            if (!s) return '';
+            let str = String(s).trim().replace(/[\(\)\（\）\s\.\,\:\-]/g, '').toLowerCase();
+            const circledHangul = {
+                '㉠': 'ㄱ', '㉡': 'ㄴ', '㉢': 'ㄷ', '㉣': 'ㄹ', '㉤': 'ㅁ',
+                '㉥': 'ㅂ', '㉦': 'ㅅ', '㉧': 'ㅇ', '㉨': 'ㅈ', '㉩': 'ㅊ',
+                '㉪': 'ㅋ', '㉫': 'ㅌ', '㉬': 'ㅍ', '㉭': 'ㅎ'
+            };
+            const circledNumbers = {
+                '①': '1', '②': '2', '③': '3', '④': '4', '⑤': '5',
+                '⑥': '6', '⑦': '7', '⑧': '8', '⑨': '9', '⑩': '10',
+                '⑪': '11', '⑫': '12', '⑬': '13', '⑭': '14', '⑮': '15'
+            };
+            for (const [k, v] of Object.entries(circledHangul)) {
+                str = str.split(k).join(v);
+            }
+            for (const [k, v] of Object.entries(circledNumbers)) {
+                str = str.split(k).join(v);
+            }
+            return str;
+        }
+
+        function matchMatchingLabels(dotLabel, targetLabel, index) {
+            const dNorm = normalizeMatchingLabel(dotLabel);
+            const tNorm = normalizeMatchingLabel(targetLabel);
+            if (!dNorm || !tNorm) return false;
+            if (dNorm === tNorm) return true;
+            if (index !== undefined && dNorm === String(index + 1)) return true;
+            return false;
+        }
+
         // 선잇기 문항의 모든 페어가 고유한 앵커 객체를 갖도록 보장하는 동기화 헬퍼
 
         function ensureMatchingDotsInitialized(r) {
-
             if (!r.matching_info) {
-
                 r.matching_info = {
-
                     direction: (r.ans_roi && r.ans_roi.h > r.ans_roi.w * 0.75) ? 'vertical' : 'horizontal',
-
                     source_dots: [],
-
                     target_dots: [],
-
                     pairs: []
-
                 };
-
             }
-
             const pairs = parseMatchingPairs(r.answer || '');
-
-            const isVertical = (r.matching_info.direction === 'vertical');
+            const isVertical = (r.matching_direction && r.matching_direction !== 'auto')
+                ? (r.matching_direction === 'vertical')
+                : (r.matching_info.direction === 'vertical');
 
             if (!Array.isArray(r.matching_info.source_dots)) r.matching_info.source_dots = [];
-
             if (!Array.isArray(r.matching_info.target_dots)) r.matching_info.target_dots = [];
 
-
-
-            const cleanLabel = (s) => String(s || '').replace(/[\(\)\（\）\s]/g, '');
-
-
-
             // 1. source_dots 확인 및 누락분 자동 생성
-
             pairs.forEach((p, pIdx) => {
-
-                const fromCl = cleanLabel(p.from);
-
-                let found = r.matching_info.source_dots.find(d => cleanLabel(d.label) === fromCl || cleanLabel(d.label) === String(pIdx + 1));
-
+                let found = r.matching_info.source_dots.find(d => matchMatchingLabels(d.label, p.from, pIdx));
                 if (!found) {
-
                     const normX = isVertical ? ((pIdx + 0.5) / Math.max(1, pairs.length)) : 0.42;
-
                     const normY = isVertical ? 0.35 : ((pIdx + 0.5) / Math.max(1, pairs.length));
-
                     const newDot = {
-
                         label: p.from,
-
                         roi_norm_x: normX,
-
                         roi_norm_y: normY,
-
                         abs_x: r.ans_roi ? (r.ans_roi.x + normX * r.ans_roi.w) : 0,
-
-                        abs_y: r.ans_roi ? (r.ans_roi.y + normY * r.ans_roi.h) : 0
-
+                        abs_y: r.ans_roi ? (r.ans_roi.y + normY * r.ans_roi.h) : 0,
+                        is_synthetic: true
                     };
-
                     r.matching_info.source_dots.push(newDot);
-
                 }
-
             });
-
-
 
             // 2. target_dots 확인 및 누락분 자동 생성
-
             const allTargets = Array.from(new Set(pairs.map(item => item.to))).sort();
-
             pairs.forEach((p, pIdx) => {
-
-                const toCl = cleanLabel(p.to);
-
-                let found = r.matching_info.target_dots.find(d => cleanLabel(d.label) === toCl);
-
+                let found = r.matching_info.target_dots.find(d => matchMatchingLabels(d.label, p.to));
                 if (!found) {
-
                     let tIdx = allTargets.indexOf(p.to);
-
                     if (tIdx < 0) tIdx = pIdx;
-
                     const tCount = Math.max(allTargets.length, pairs.length);
-
                     const normX = isVertical ? ((tIdx + 0.5) / Math.max(1, tCount)) : 0.78;
-
                     const normY = isVertical ? 0.85 : ((tIdx + 0.5) / Math.max(1, tCount));
-
                     const newDot = {
-
                         label: p.to,
-
                         roi_norm_x: normX,
-
                         roi_norm_y: normY,
-
                         abs_x: r.ans_roi ? (r.ans_roi.x + normX * r.ans_roi.w) : 0,
-
-                        abs_y: r.ans_roi ? (r.ans_roi.y + normY * r.ans_roi.h) : 0
-
+                        abs_y: r.ans_roi ? (r.ans_roi.y + normY * r.ans_roi.h) : 0,
+                        is_synthetic: true
                     };
-
                     r.matching_info.target_dots.push(newDot);
-
                 }
-
             });
-
         }
 
-
-
-        // 드래그된 점 근처(반경 15px)에 실제 시험지 이미지의 인쇄된 흑색 점(•)이 있으면 자석처럼 무게중심으로 스냅
-
+        // 드래그된 점 근처의 인쇄된 흑색 점(•)으로 적응형 자석 스냅 (15px -> 24px -> 30px)
         function snapDotToNearestDarkBullet(r, dot) {
-
             if (!r || !r.ans_roi || !dot) return;
-
             const targetPageIdx = pages.findIndex(p => p.page_uid === r.page_uid || p.page_num === r.page);
-
             const pageImg = (targetPageIdx >= 0 && pageImages[targetPageIdx] && pageImages[targetPageIdx].complete)
-
                 ? pageImages[targetPageIdx]
-
                 : pageImages[activePageIndex];
-
             if (!pageImg || !pageImg.complete || pageImg.naturalWidth === 0) return;
 
-
-
             const ar = r.ans_roi;
-
             const pt = getMatchingDotCanvasPos(r, dot);
-
-            const radius = 15;
-
-
+            const maxRadius = 30;
+            const radii = [15, 24, 30];
 
             const off = document.createElement('canvas');
-
-            const offSize = radius * 2 + 1;
-
+            const offSize = maxRadius * 2 + 1;
             off.width = offSize;
-
             off.height = offSize;
-
             const oCtx = off.getContext('2d');
-
             try {
-
-                oCtx.drawImage(pageImg, pt.x - radius, pt.y - radius, offSize, offSize, 0, 0, offSize, offSize);
-
+                oCtx.drawImage(pageImg, pt.x - maxRadius, pt.y - maxRadius, offSize, offSize, 0, 0, offSize, offSize);
                 const imgData = oCtx.getImageData(0, 0, offSize, offSize);
-
                 const data = imgData.data;
 
+                let lastSumX = 0, lastSumY = 0, lastDarkCount = 0;
+                let snapped = false;
 
-
-                let sumX = 0, sumY = 0, darkCount = 0;
-
-                for (let py = 0; py < offSize; py++) {
-
-                    for (let px = 0; px < offSize; px++) {
-
-                        const idx = (py * offSize + px) * 4;
-
-                        const red = data[idx];
-
-                        const green = data[idx + 1];
-
-                        const blue = data[idx + 2];
-
-                        const dist = Math.hypot(px - radius, py - radius);
-
-                        if (dist <= radius && red < 95 && green < 95 && blue < 95) {
-
-                            sumX += px;
-
-                            sumY += py;
-
-                            darkCount++;
-
+                for (const radius of radii) {
+                    let sumX = 0, sumY = 0, darkCount = 0;
+                    for (let py = maxRadius - radius; py <= maxRadius + radius; py++) {
+                        for (let px = maxRadius - radius; px <= maxRadius + radius; px++) {
+                            const idx = (py * offSize + px) * 4;
+                            const red = data[idx];
+                            const green = data[idx + 1];
+                            const blue = data[idx + 2];
+                            const dist = Math.hypot(px - maxRadius, py - maxRadius);
+                            if (dist <= radius && red < 95 && green < 95 && blue < 95) {
+                                sumX += px;
+                                sumY += py;
+                                darkCount++;
+                            }
                         }
-
                     }
+                    lastSumX = sumX;
+                    lastSumY = sumY;
+                    lastDarkCount = darkCount;
 
+                    // 불릿 점(4~28픽셀) 우선 스냅
+                    if (darkCount >= 4 && darkCount <= 28) {
+                        const snapCanvasX = (pt.x - maxRadius) + (sumX / darkCount);
+                        const snapCanvasY = (pt.y - maxRadius) + (sumY / darkCount);
+                        const relX = Math.max(0, Math.min(ar.w, snapCanvasX - ar.x));
+                        const relY = Math.max(0, Math.min(ar.h, snapCanvasY - ar.y));
+                        dot.roi_norm_x = (ar.w > 0) ? (relX / ar.w) : 0;
+                        dot.roi_norm_y = (ar.h > 0) ? (relY / ar.h) : 0;
+                        dot.abs_x = ar.x + relX;
+                        dot.abs_y = ar.y + relY;
+                        snapped = true;
+                        break;
+                    }
                 }
 
-
-
-                if (darkCount >= 4) {
-
-                    const snapCanvasX = (pt.x - radius) + (sumX / darkCount);
-
-                    const snapCanvasY = (pt.y - radius) + (sumY / darkCount);
-
+                if (!snapped && lastDarkCount >= 4) {
+                    const snapCanvasX = (pt.x - maxRadius) + (lastSumX / lastDarkCount);
+                    const snapCanvasY = (pt.y - maxRadius) + (lastSumY / lastDarkCount);
                     const relX = Math.max(0, Math.min(ar.w, snapCanvasX - ar.x));
-
                     const relY = Math.max(0, Math.min(ar.h, snapCanvasY - ar.y));
-
                     dot.roi_norm_x = (ar.w > 0) ? (relX / ar.w) : 0;
-
                     dot.roi_norm_y = (ar.h > 0) ? (relY / ar.h) : 0;
-
                     dot.abs_x = ar.x + relX;
-
                     dot.abs_y = ar.y + relY;
-
                 }
-
             } catch (e) {
-
                 // cross-origin 등 예외 발생 시 원래 위치 유지
-
             }
-
         }
 
 
@@ -4978,12 +4650,16 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
             const sDots = (r.matching_info && Array.isArray(r.matching_info.source_dots)) ? r.matching_info.source_dots : [];
             const tDots = (r.matching_info && Array.isArray(r.matching_info.target_dots)) ? r.matching_info.target_dots : [];
             const dotArrangement = detectDotArrangement(sDots, tDots, r);
-            let dir = (r.matching_info && r.matching_info.direction) ? r.matching_info.direction : ((r.matching_direction && r.matching_direction !== 'auto') ? r.matching_direction : ((r.ans_roi.h > r.ans_roi.w * 0.75) ? 'vertical' : 'horizontal'));
-            if (dotArrangement === 'vertical') dir = 'vertical';
-            else if (dotArrangement === 'horizontal') dir = 'horizontal';
-
-
-
+            let dir = 'horizontal';
+            if (r.matching_direction && r.matching_direction !== 'auto') {
+                dir = r.matching_direction;
+            } else if (dotArrangement === 'vertical' || dotArrangement === 'horizontal') {
+                dir = dotArrangement;
+            } else if (r.matching_info && r.matching_info.direction) {
+                dir = r.matching_info.direction;
+            } else {
+                dir = (r.ans_roi && r.ans_roi.h > r.ans_roi.w * 0.75) ? 'vertical' : 'horizontal';
+            }
             const isVertical = (dir === 'vertical');
 
 
@@ -5126,7 +4802,7 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
 
 
-                const matchedSDot = sDots.find(d => cleanLabel(d.label) === fromCl || cleanLabel(d.label) === String(pIdx + 1));
+                const matchedSDot = sDots.find(d => matchMatchingLabels(d.label, p.from, pIdx));
 
 
 
@@ -5170,7 +4846,7 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
 
 
-                const matchedTDot = tDots.find(d => cleanLabel(d.label) === toCl);
+                const matchedTDot = tDots.find(d => matchMatchingLabels(d.label, p.to));
 
 
 
@@ -5920,7 +5596,7 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
 
 
-                    const curDir = (r.matching_info && r.matching_info.direction) ? r.matching_info.direction : ((r.matching_direction && r.matching_direction !== 'auto') ? r.matching_direction : ((r.ans_roi && r.ans_roi.h > r.ans_roi.w * 0.75) ? 'vertical' : 'horizontal'));
+                    const curDir = (r.matching_direction && r.matching_direction !== 'auto') ? r.matching_direction : ((r.matching_info && r.matching_info.direction) ? r.matching_info.direction : ((r.ans_roi && r.ans_roi.h > r.ans_roi.w * 0.75) ? 'vertical' : 'horizontal'));
 
                     const aiAnalyzed = Boolean(r.matching_info && r.matching_info.source_dots && r.matching_info.source_dots.length > 0);
 
@@ -5944,14 +5620,17 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
                             </div>
 
-                            <div class="matching-status-bar">
-
-                                <span class="badge-ai-status">✨ AI 분석 완료 (${curDir === 'vertical' ? '세로형: 위 ➔ 아래' : '가로형: 좌 ➔ 우'})</span>
-
-                                <span class="badge-dot-hint">💡 캔버스에서 점 드래그 이동</span>
-
+                            <div class="matching-status-bar" style="display:flex; flex-direction:column; align-items:flex-start; gap:6px; padding:6px 8px; background:rgba(15,23,42,0.6); border-radius:6px; border:1px solid rgba(255,255,255,0.08);">
+                                <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+                                    <span class="badge-ai-status" style="font-size:11px; color:#5eead4;">✨ 방향: <strong>${curDir === 'vertical' ? '세로형 (위 ➔ 아래)' : '가로형 (좌 ➔ 우)'}</strong></span>
+                                    <span class="badge-dot-hint" style="font-size:10px; color:#94a3b8;">💡 점 드래그 이동 가능</span>
+                                </div>
+                                <div style="display:flex; gap:4px; width:100%;">
+                                    <button type="button" class="btn" style="flex:1; font-size:10.5px; padding:3px 4px; border-radius:4px; font-weight:600; cursor:pointer; background:${curDir === 'horizontal' ? '#0284c7' : 'rgba(255,255,255,0.08)'}; color:#fff; border:1px solid ${curDir === 'horizontal' ? '#38bdf8' : 'rgba(255,255,255,0.15)'};" onclick="setMatchingDirection(${idx}, 'horizontal')">가로형 (좌➔우)</button>
+                                    <button type="button" class="btn" style="flex:1; font-size:10.5px; padding:3px 4px; border-radius:4px; font-weight:600; cursor:pointer; background:${curDir === 'vertical' ? '#0284c7' : 'rgba(255,255,255,0.08)'}; color:#fff; border:1px solid ${curDir === 'vertical' ? '#38bdf8' : 'rgba(255,255,255,0.15)'};" onclick="setMatchingDirection(${idx}, 'vertical')">세로형 (위➔아래)</button>
+                                    <button type="button" class="btn" style="font-size:10.5px; padding:3px 6px; border-radius:4px; font-weight:600; cursor:pointer; background:rgba(255,255,255,0.08); color:#38bdf8; border:1px solid rgba(56,189,248,0.4);" onclick="triggerGeminiMatchingAnalysis(${idx})" title="Gemini AI로 점 위치 재분석">🔄 AI 재분석</button>
+                                </div>
                             </div>
-
                             <div class="matching-diagram-thumb-wrap">
 
                                 <div class="thumb-header">
@@ -6402,13 +6081,17 @@ function renderMatchingCropPreviews() {
                     const sDots = (r.matching_info && Array.isArray(r.matching_info.source_dots)) ? r.matching_info.source_dots : [];
                     const tDots = (r.matching_info && Array.isArray(r.matching_info.target_dots)) ? r.matching_info.target_dots : [];
                     const dotArrangement = detectDotArrangement(sDots, tDots, r);
-                    let dir = (r.matching_info && r.matching_info.direction) ? r.matching_info.direction : ((r.matching_direction && r.matching_direction !== 'auto') ? r.matching_direction : ((ar.h > ar.w * 0.75) ? 'vertical' : 'horizontal'));
-                    if (dotArrangement === 'vertical') dir = 'vertical';
-                    else if (dotArrangement === 'horizontal') dir = 'horizontal';
-
-
-
-                    const isVertical = (dir === 'vertical');
+            let dir = 'horizontal';
+            if (r.matching_direction && r.matching_direction !== 'auto') {
+                dir = r.matching_direction;
+            } else if (dotArrangement === 'vertical' || dotArrangement === 'horizontal') {
+                dir = dotArrangement;
+            } else if (r.matching_info && r.matching_info.direction) {
+                dir = r.matching_info.direction;
+            } else {
+                dir = (r.ans_roi && r.ans_roi.h > r.ans_roi.w * 0.75) ? 'vertical' : 'horizontal';
+            }
+            const isVertical = (dir === 'vertical');
 
 
 
@@ -6458,7 +6141,7 @@ function renderMatchingCropPreviews() {
 
 
 
-                        const matchedSDot = sDots.find(d => cleanLabel(d.label) === fromCl || cleanLabel(d.label) === String(pIdx + 1));
+                        const matchedSDot = sDots.find(d => matchMatchingLabels(d.label, p.from, pIdx));
 
 
 
@@ -6506,7 +6189,7 @@ function renderMatchingCropPreviews() {
 
 
 
-                        const matchedTDot = tDots.find(d => cleanLabel(d.label) === toCl);
+                        const matchedTDot = tDots.find(d => matchMatchingLabels(d.label, p.to));
 
 
 

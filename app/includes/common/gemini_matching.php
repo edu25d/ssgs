@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * includes/common/gemini_matching.php
  * Gemini Vision API를 이용한 선잇기(Matching Line) 문항 지능형 분석 모듈
@@ -23,7 +23,7 @@ if (!function_exists('toNorm01')) {
 }
 if (!function_exists('snapDotToNearestDarkBulletInImage')) {
     /**
-     * GD 이미지 리소스에서 주어진 정규화 좌표 근방(반경 15px)의 인쇄된 흑색 점(•) 무게중심으로 스냅
+     * GD 이미지 리소스에서 주어진 정규화 좌표 근방의 인쇄된 흑색 점(•) 무게중심으로 적응형 스냅 (15px -> 24px -> 30px)
      *
      * @param resource|\GdImage $gdImg 크롭된 GD 이미지
      * @param float $normX 정규화 X (0.0~1.0)
@@ -37,101 +37,61 @@ if (!function_exists('snapDotToNearestDarkBulletInImage')) {
             return ['norm_x' => $normX, 'norm_y' => $normY];
         }
 
-        // [방안 C 안전망] 가로형 선잇기에서 AI가 왼쪽 번호 (1)의 좌표(x < 0.28)를 시작점으로 잘못 반환한 경우,
-        // 번호 텍스트를 건너뛰고 중앙 불릿 밴드(x: 35%~58%)에서 실제 인쇄된 원형 점 •을 탐색
-        if ($direction === 'horizontal') {
-            if ($role === 'source' && $normX < 0.28) {
-                $targetMinX = (int)round($cropW * 0.35);
-                $targetMaxX = (int)round($cropW * 0.58);
-                $targetMinY = max(0, (int)round($normY * $cropH) - 20);
-                $targetMaxY = min($cropH - 1, (int)round($normY * $cropH) + 20);
-
-                $bandSumX = 0;
-                $bandSumY = 0;
-                $bandCount = 0;
-                for ($by = $targetMinY; $by <= $targetMaxY; $by++) {
-                    for ($bx = $targetMinX; $bx <= $targetMaxX; $bx++) {
-                        $rgb = imagecolorat($gdImg, $bx, $by);
-                        $r = ($rgb >> 16) & 0xFF;
-                        $g = ($rgb >> 8) & 0xFF;
-                        $b = $rgb & 0xFF;
-                        if ($r < 95 && $g < 95 && $b < 95) {
-                            $bandSumX += $bx;
-                            $bandSumY += $by;
-                            $bandCount++;
-                        }
-                    }
-                }
-                if ($bandCount >= 4) {
-                    return [
-                        'norm_x' => max(0.0, min(1.0, ($bandSumX / $bandCount) / $cropW)),
-                        'norm_y' => max(0.0, min(1.0, ($bandSumY / $bandCount) / $cropH))
-                    ];
-                }
-            } elseif ($role === 'target' && $normX < 0.60) {
-                $targetMinX = (int)round($cropW * 0.65);
-                $targetMaxX = (int)round($cropW * 0.88);
-                $targetMinY = max(0, (int)round($normY * $cropH) - 20);
-                $targetMaxY = min($cropH - 1, (int)round($normY * $cropH) + 20);
-
-                $bandSumX = 0;
-                $bandSumY = 0;
-                $bandCount = 0;
-                for ($by = $targetMinY; $by <= $targetMaxY; $by++) {
-                    for ($bx = $targetMinX; $bx <= $targetMaxX; $bx++) {
-                        $rgb = imagecolorat($gdImg, $bx, $by);
-                        $r = ($rgb >> 16) & 0xFF;
-                        $g = ($rgb >> 8) & 0xFF;
-                        $b = $rgb & 0xFF;
-                        if ($r < 95 && $g < 95 && $b < 95) {
-                            $bandSumX += $bx;
-                            $bandSumY += $by;
-                            $bandCount++;
-                        }
-                    }
-                }
-                if ($bandCount >= 4) {
-                    return [
-                        'norm_x' => max(0.0, min(1.0, ($bandSumX / $bandCount) / $cropW)),
-                        'norm_y' => max(0.0, min(1.0, ($bandSumY / $bandCount) / $cropH))
-                    ];
-                }
-            }
-        }
-
         $cx = (int)round($normX * $cropW);
         $cy = (int)round($normY * $cropH);
-        $searchRadius = 15;
 
-        $sumX = 0;
-        $sumY = 0;
-        $darkCount = 0;
+        // 1단계: 15px, 2단계: 24px, 3단계: 30px 단계적 적응형 탐색
+        // 작은 불릿 점(•, 대략 4~28픽셀)을 우선 감지하여 인접한 큰 글자(㉠ 기호 테두리 등)로 빨려들어가는 것을 방지
+        $radii = [15, 24, 30];
+        $lastSumX = 0;
+        $lastSumY = 0;
+        $lastDarkCount = 0;
 
-        $minX = max(0, $cx - $searchRadius);
-        $maxX = min($cropW - 1, $cx + $searchRadius);
-        $minY = max(0, $cy - $searchRadius);
-        $maxY = min($cropH - 1, $cy + $searchRadius);
+        foreach ($radii as $rLimit) {
+            $sumX = 0;
+            $sumY = 0;
+            $darkCount = 0;
 
-        for ($y = $minY; $y <= $maxY; $y++) {
-            for ($x = $minX; $x <= $maxX; $x++) {
-                if (hypot($x - $cx, $y - $cy) > $searchRadius) continue;
-                $rgb = imagecolorat($gdImg, $x, $y);
-                $r = ($rgb >> 16) & 0xFF;
-                $g = ($rgb >> 8) & 0xFF;
-                $b = $rgb & 0xFF;
-                // 인쇄된 흑색 점 픽셀 판정 (RGB 각각 95 이하)
-                if ($r < 95 && $g < 95 && $b < 95) {
-                    $sumX += $x;
-                    $sumY += $y;
-                    $darkCount++;
+            $minX = max(0, $cx - $rLimit);
+            $maxX = min($cropW - 1, $cx + $rLimit);
+            $minY = max(0, $cy - $rLimit);
+            $maxY = min($cropH - 1, $cy + $rLimit);
+
+            for ($y = $minY; $y <= $maxY; $y++) {
+                for ($x = $minX; $x <= $maxX; $x++) {
+                    if (hypot($x - $cx, $y - $cy) > $rLimit) continue;
+                    $rgb = imagecolorat($gdImg, $x, $y);
+                    $r = ($rgb >> 16) & 0xFF;
+                    $g = ($rgb >> 8) & 0xFF;
+                    $b = $rgb & 0xFF;
+                    // 인쇄된 흑색 점 픽셀 판정 (RGB 각각 95 이하)
+                    if ($r < 95 && $g < 95 && $b < 95) {
+                        $sumX += $x;
+                        $sumY += $y;
+                        $darkCount++;
+                    }
                 }
+            }
+
+            $lastSumX = $sumX;
+            $lastSumY = $sumY;
+            $lastDarkCount = $darkCount;
+
+            // 원형 점(불릿) 군집(4~28픽셀) 발견 시 즉시 가장 가까운 점의 무게중심으로 정밀 스냅
+            if ($darkCount >= 4 && $darkCount <= 28) {
+                $snappedX = $sumX / $darkCount;
+                $snappedY = $sumY / $darkCount;
+                return [
+                    'norm_x' => max(0.0, min(1.0, $snappedX / $cropW)),
+                    'norm_y' => max(0.0, min(1.0, $snappedY / $cropH))
+                ];
             }
         }
 
-        // 인쇄된 원형 점 픽셀 군집(4개 이상) 발견 시 무게중심으로 정밀 스냅
-        if ($darkCount >= 4) {
-            $snappedX = $sumX / $darkCount;
-            $snappedY = $sumY / $darkCount;
+        // 28픽셀 초과 군집이더라도 30px 이내에 유효 흑색 픽셀이 있다면 무게중심 스냅
+        if ($lastDarkCount >= 4) {
+            $snappedX = $lastSumX / $lastDarkCount;
+            $snappedY = $lastSumY / $lastDarkCount;
             return [
                 'norm_x' => max(0.0, min(1.0, $snappedX / $cropW)),
                 'norm_y' => max(0.0, min(1.0, $snappedY / $cropH))
@@ -188,75 +148,39 @@ CRITICAL ANSWER KEY GUIDANCE (공식 정답표 정보):
 ";
         }
 
-        $prompt = "You are an expert exam analyzer for Korean elementary and secondary school tests.
-"
-                . "Analyze this cropped exam question diagram image for a line-matching (선잇기) problem.
-"
-                . "{$answerContext}
-"
-                . "CRITICAL DIRECTION RULES (가로형 vs 세로형 엄격 구분):
-"
-                . "1. 'horizontal' (가로형 / 좌우 연결):
-"
-                . "   - The diagram is split into TWO COLUMNS: a LEFT column of items and a RIGHT column of items.
-"
-                . "   - Left column contains source items (e.g., (1), (2) with pictures/illustrations stacked vertically).
-"
-                . "   - Right column contains target items (e.g., ㉠, ㉡ with text labels stacked vertically).
-"
-                . "   - The lines connect HORIZONTALLY from the left column across to the right column!
-"
-                . "   - [주의]: left column의 items이 위아래로 쌓여 있더라도, lines가 LEFT에서 RIGHT로 연결되고 source/target dots의 x좌표가 명확히 두 열(왼쪽/오른쪽)로 구분되면 horizontal입니다. 그러나 source dots의 norm_y가 target dots의 norm_y보다 모두 작거나 source dots가 target dots보다 위에 있으면, 문제는 VERTICAL입니다. 이 경우 horizontal로 분류하지 마세요.
-"
-                . "2. 'vertical' (세로형 / 상하 연결):
-"
-                . "   - The diagram is split into TWO ROWS: a TOP row of items side-by-side and a BOTTOM row of items side-by-side.
-"
-                . "   - Top row contains source items (1), (2), (3) side-by-side.
-"
-                . "   - Bottom row contains target items ㉠, ㉡, ㉢ side-by-side.
-"
-                . "   - The lines connect VERTICALLY from top row down to bottom row."
-                . "   - [VERTICAL 우선 규칙] source dots의 norm_y가 target dots의 norm_y보다 모두 작으면 (즉, source dots가 target dots보다 위에 있으면), 문제는 VERTICAL입니다. 이 경우 horizontal로 분류하지 마세요."
-                . "   - [출처-도착 수직 관계] source_dots의 최대 norm_y < target_dots의 최소 norm_y 이면 VERTICAL입니다. source_dots 전체가 target_dots보다 위에 있는 경우입니다."
-                . "   - [Y좌표 비교] source_dots와 target_dots의 norm_y 값들을 비교하세요. source_dots의 최대 norm_y < target_dots의 최소 norm_y → VERTICAL (source 전체가 target보다 위). source_dots의 norm_y 범위(약 0.35~0.55)와 target_dots의 norm_y 범위(약 0.65~0.85)가 분리되어 있으면 → VERTICAL. source_dots와 target_dots의 norm_y 범위가 겹치고, norm_x가 명확히 두 열(왼쪽/오른쪽)로 구분되면 → HORIZONTAL."
-                . "   - [크롤 종횡비 주의] 크롭 영역의 너비가 높이보다 크더라도(wide crop), 이것이 곧 horizontal을 의미하지는 않습니다. 크롤이 넓어도 source dots가 target dots보다 위에 있으면 VERTICAL입니다. 크롤의 너비와 높이에 속지 말고 dots의 실제 y좌표를 기준으로 판단하세요."
-
-                . "CRITICAL NEGATIVE RULES FOR ANCHOR DOTS (방안 C: 음성 제약 및 번호 위치 배제):\n"
-                . "1. [ABSOLUTE NEGATIVE CONSTRAINT]: NEVER return the coordinates of question sub-numbers '(1)', '(2)', '1', '2' on the far left as source dots!\n"
-                . "   - In Korean test papers, connection lines NEVER connect to the leftmost question number text '(1)'!\n"
-                . "   - The connection dot is ALWAYS a small printed solid black circular dot ('•' or '●').\n"
-                . "2. In 'horizontal' (가로형) matching:\n"
-                . "   - SOURCE DOTS (Left column items):\n"
-                . "     * The dot '•' is located AFTER the item image/text (to the right of the picture, in the central vertical strip of the problem, typically 0.38 <= norm_x <= 0.55).\n"
-                . "     * It is a CRITICAL ERROR to return norm_x < 0.25 (which is the number '(1)' or '(2)')! Every source dot MUST have norm_x > 0.30!\n"
-                . "   - TARGET DOTS (Right column items):\n"
-                . "     * The dot '•' is located BEFORE the target label (to the left of '㉠', '㉡', typically 0.70 <= norm_x <= 0.85).\n"
-                . "     * It is a CRITICAL ERROR to return norm_x < 0.60 for target dots!\n"
-                . "   - Every connecting line MUST go across from the LEFT column dots (x ~ 0.45) to the RIGHT column dots (x ~ 0.77).\n"
-                . "   - NEVER connect two items in the same column! (e.g. NEVER connect (2) to (1)!)\n"
-                . "3. In 'vertical' (세로형) matching:\n"
-                . "   - SOURCE DOTS (Top row): Located directly BELOW each top item (typically 0.35 <= norm_y <= 0.55).\n"
-                . "   - TARGET DOTS (Bottom row): Located directly ABOVE each bottom item (typically 0.65 <= norm_y <= 0.85).\n"
-                . "4. You MUST return the EXACT CENTER of the printed small circular dots ('•' / '●') as 'norm_x' and 'norm_y' (0.0 to 1.0).\n\n"
-                . "Tasks:
-"
-                . "1. 'is_matching': boolean. Is this truly a line-matching question diagram?
-"
-                . "2. 'direction': 'horizontal' (left-to-right) or 'vertical' (top-to-bottom).
-"
-                . "3. 'source_label_style': string describing source item numbering (e.g. '(1)', '1', '·', 'ㄱ').
-"
-                . "4. 'target_label_style': string describing target destination markers (e.g. '㉠', 'ㄱ', 'A', '·').
-"
-                . "5. 'matching_box': the bounding box [ymin, xmin, ymax, xmax] enclosing ALL connecting items, pictures, options, boxes, and connection dots.
-"
-                . "6. 'source_dots': starting connection dots/anchors (e.g. (1), (2), (3)). Give 'label', exact center 'norm_x' (0.0~1.0), 'norm_y' (0.0~1.0) of the printed dot '•'.
-"
-                . "7. 'target_dots': destination connection dots/anchors (e.g. ㉠, ㉡, ㉢). Give 'label', exact center 'norm_x' (0.0~1.0), 'norm_y' (0.0~1.0) of the printed dot '•'.
-"
-                . "8. 'pairs': array of matching pairs if answer is provided or diagram has printed lines, e.g. [{\"from\": \"(1)\", \"to\": \"㉢\"}].
-"
+        $prompt = "You are an expert exam analyzer for Korean elementary and secondary school tests.\n"
+                . "Analyze this cropped exam question diagram image for a line-matching (선잇기) problem.\n"
+                . "{$answerContext}\n"
+                . "[1. DIRECTION & LAYOUT DETERMINATION]\n"
+                . "1. 'horizontal' (가로형 / 2-column layout):\n"
+                . "   - Left column contains source items (e.g. (1), (2), (3) with text/pictures stacked vertically).\n"
+                . "   - Right column contains target choices (e.g. ㉠, ㉡, ㉢ with text/pictures stacked vertically).\n"
+                . "   - Connecting lines run HORIZONTALLY from Left column across to Right column.\n"
+                . "   - Source dots '•': located on the RIGHT side of each left item/text.\n"
+                . "   - Target dots '•': located on the LEFT side of each right choice.\n"
+                . "2. 'vertical' (세로형 / 2-row layout):\n"
+                . "   - Top row contains source items (e.g. (1), (2), (3) with pictures/text arranged side-by-side).\n"
+                . "   - Bottom row contains target choices (e.g. ㉠, ㉡, ㉢ arranged side-by-side).\n"
+                . "   - Connecting lines run VERTICALLY from Top row down to Bottom row.\n"
+                . "   - Source dots '•': located directly BELOW each top item (1), (2), (3), aligned with its vertical center axis.\n"
+                . "   - Target dots '•': located directly ABOVE each bottom choice ㉠, ㉡, ㉢, aligned with its vertical center axis.\n\n"
+                . "[2. ANCHOR DOTS SSOT RULES (CRITICAL)]\n"
+                . "- Connection anchor points are ALWAYS the small printed solid black circular dots ('•' or '●').\n"
+                . "- NEVER return coordinates of question numbers, option boxes, or text; locate the EXACT center of each printed circular dot '•' (5~10px dot).\n"
+                . "- Both 'norm_x' and 'norm_y' MUST be accurate normalized coordinates between 0.0 and 1.0 within this cropped image.\n\n"
+                . "[3. DISAMBIGUATION FOR KOREAN TEST FORMAT (DO NOT CONFUSE)]\n"
+                . "- In Korean test papers, target choices often appear in the format: '• ㉠ [choice text]' or '• ① [text]'.\n"
+                . "- CRITICAL: Do NOT confuse the circled label ('㉠', '①') with the anchor dot! The anchor dot is the standalone small dot '•' printed BEFORE the circled label.\n"
+                . "- Never return the center or left edge of the circled symbol '㉠'; pinpoint the center of the printed bullet dot '•' itself!\n\n"
+                . "Tasks:\n"
+                . "1. 'is_matching': boolean. Is this truly a line-matching question diagram?\n"
+                . "2. 'direction': 'horizontal' or 'vertical'.\n"
+                . "3. 'source_label_style': string describing source item numbering (e.g. '(1)', '1', 'ㄱ').\n"
+                . "4. 'target_label_style': string describing target destination markers (e.g. '㉠', 'ㄱ', 'A').\n"
+                . "5. 'matching_box': bounding box [ymin, xmin, ymax, xmax] (0.0 to 1.0) enclosing ALL connecting items, pictures, options, and connection dots.\n"
+                . "6. 'source_dots': starting connection dots (e.g. (1), (2), (3)). Give 'label', exact center 'norm_x' (0.0~1.0), 'norm_y' (0.0~1.0) of the printed dot '•'.\n"
+                . "7. 'target_dots': destination connection dots (e.g. ㉠, ㉡, ㉢). Give 'label', exact center 'norm_x' (0.0~1.0), 'norm_y' (0.0~1.0) of the printed dot '•'.\n"
+                . "8. 'pairs': array of matching pairs if answer is provided or diagram has printed lines, e.g. [{\"from\": \"(1)\", \"to\": \"㉢\"}].\n"
                 . "Return strictly valid JSON matching the schema.";
 
         $schema = [
@@ -573,299 +497,101 @@ if (!function_exists('autoAnalyzeMatchingRoisServerSide')) {
                 $r['sub_type'] = 'subjective';
                 unset($r['matching_info']);
                 continue;
-            }            // 1. matching_box가 있으면 ans_roi를 통합 다이어그램 전체 영역으로 교체 (스케일 자동 판정 및 Strict Clamping)
+            }
 
+
+            // 1. matching_box가 있으면 ans_roi를 통합 다이어그램 전체 영역으로 교체 (toNorm01 독립 정규화 적용)
             if (!empty($gData['matching_box']) && isset($gData['matching_box']['ymin'])) {
-
                 $mbox = $gData['matching_box'];
+                $mYmin = toNorm01($mbox['ymin'] ?? 0);
+                $mXmin = toNorm01($mbox['xmin'] ?? 0);
+                $mYmax = toNorm01($mbox['ymax'] ?? 1);
+                $mXmax = toNorm01($mbox['xmax'] ?? 1);
 
-                $rawYmin = (float)($mbox['ymin'] ?? 0);
-
-                $rawXmin = (float)($mbox['xmin'] ?? 0);
-
-                $rawYmax = (float)($mbox['ymax'] ?? 1);
-
-                $rawXmax = (float)($mbox['xmax'] ?? 1);
-
-
-
-                $maxCoord = max($rawYmin, $rawXmin, $rawYmax, $rawXmax);
-
-                $boxDivisor = 1.0;
-
-                if ($maxCoord > 100.0) {
-
-                    $boxDivisor = 1000.0;
-
-                } elseif ($maxCoord > 1.0) {
-
-                    $boxDivisor = 100.0;
-
+                // 감지된 점들이 matching_box 바깥에 있어 클램핑되는 현상 방지: 점들을 모두 포함하도록 박스 확장 (2% 마진)
+                $allDots = array_merge($gData['source_dots'] ?? [], $gData['target_dots'] ?? []);
+                foreach ($allDots as $d) {
+                    $dx = toNorm01($d['norm_x'] ?? 0);
+                    $dy = toNorm01($d['norm_y'] ?? 0);
+                    if ($dx > 0) {
+                        $mXmin = min($mXmin, max(0.0, $dx - 0.02));
+                        $mXmax = max($mXmax, min(1.0, $dx + 0.02));
+                    }
+                    if ($dy > 0) {
+                        $mYmin = min($mYmin, max(0.0, $dy - 0.02));
+                        $mYmax = max($mYmax, min(1.0, $dy + 0.02));
+                    }
                 }
 
-
-
-                $mYmin = max(0.0, min(1.0, $rawYmin / $boxDivisor));
-
-                $mXmin = max(0.0, min(1.0, $rawXmin / $boxDivisor));
-
-                $mYmax = max(0.0, min(1.0, $rawYmax / $boxDivisor));
-
-                $mXmax = max(0.0, min(1.0, $rawXmax / $boxDivisor));
-
-
-
-                if ($mXmax <= $mXmin) {
-
-                    $mXmin = 0.05;
-
-                    $mXmax = 0.95;
-
-                }
-
-                if ($mYmax <= $mYmin) {
-
-                    $mYmin = 0.15;
-
-                    $mYmax = 0.95;
-
-                }
-
-
+                if ($mXmax <= $mXmin) { $mXmin = 0.05; $mXmax = 0.95; }
+                if ($mYmax <= $mYmin) { $mYmin = 0.15; $mYmax = 0.95; }
 
                 $rawX = (int)round($cropX + $mXmin * $cropW);
-
                 $rawY = (int)round($cropY + $mYmin * $cropH);
-
                 $rawW = (int)round(($mXmax - $mXmin) * $cropW);
-
                 $rawH = (int)round(($mYmax - $mYmin) * $cropH);
 
-
-
-                // 단(Column) 경계 및 다음 문항 침범 엄격 클램핑 (Strict Clamping)
-
                 $colRight = $cropX + $cropW;
-
                 $newX = max($cropX, min($colRight - 40, $rawX));
-
                 $newW = max(40, min($colRight - $newX, $rawW));
-
-
-
                 $newY = max($cropY, min($bottomY - 30, $rawY));
-
                 $newH = max(40, min($bottomY - $newY, $rawH));
 
-
-
                 $r['ans_roi'] = [
-
                     'x' => $newX,
-
                     'y' => $newY,
-
                     'w' => $newW,
-
                     'h' => $newH
-
                 ];
-
             }
-
-
-
-            // 2. dot들을 ans_roi 기준 정규화 좌표(0.0~1.0)로 변환 (스케일 일괄 정규화)
-
-            $allDots = array_merge($gData['source_dots'] ?? [], $gData['target_dots'] ?? []);
-
-            $maxDotCoord = 0.0;
-
-            foreach ($allDots as $d) {
-
-                $maxDotCoord = max($maxDotCoord, (float)($d['norm_x'] ?? 0), (float)($d['norm_y'] ?? 0));
-
-            }
-
-            $dotDivisor = 1.0;
-
-            if ($maxDotCoord > 100.0) {
-
-                $dotDivisor = 1000.0;
-
-            } elseif ($maxDotCoord > 1.0) {
-
-                $dotDivisor = 100.0;
-
-            }
-
-
 
             $curAr = $r['ans_roi'] ?? ['x' => $cropX, 'y' => $cropY, 'w' => $cropW, 'h' => $cropH];
 
             $normSourceDots = [];
-
-            // [DEBUG] 검증 2: source_dots 좌표 변환 단계별 로깅
-            if (!empty($gData['source_dots'])) {
-                error_log(sprintf(
-                    "[DEBUG] Q%s source_dots 변환 (검증2): "
-                    . "dotDivisor=%.1f crop=(%d,%d,%d,%d) curAr=(%s)",
-                    $r['display_num'],
-                    $dotDivisor,
-                    $cropX, $cropY, $cropW, $cropH,
-                    json_encode($curAr)
-                ));
-                foreach ($gData['source_dots'] ?? [] as $sIdx => $d) {
-                    $origNX = (float)($d['norm_x'] ?? 0);
-                    $origNY = (float)($d['norm_y'] ?? 0);
-                    $dnx = max(0.0, min(1.0, $origNX / $dotDivisor));
-                    $dny = max(0.0, min(1.0, $origNY / $dotDivisor));
-                    $error_log_msg = sprintf(
-                        "  [source_dot[%d]] gemini_norm=(%.4f,%.4f) "
-                        . "dnx_before_snap=(%.4f,%.4f)",
-                        $sIdx, $origNX, $origNY, $dnx, $dny
-                    );
-                    if (!empty($cropImg)) {
-                        $snapped = snapDotToNearestDarkBulletInImage($cropImg, $dnx, $dny, $cropW, $cropH,
-                            (string)($gData['direction'] ?? 'vertical'), 'source');
-                        $dnx = $snapped['norm_x'];
-                        $dny = $snapped['norm_y'];
-                        $error_log_msg .= sprintf(
-                            " snap=(%.4f,%.4f) darkCount=%d",
-                            $snapped['norm_x'], $snapped['norm_y'],
-                            $snapped['darkCount'] ?? -1
-                        );
-                    }
-                    $absX = $cropX + $dnx * $cropW;
-                    $absY = $cropY + $dny * $cropH;
-                    $roiNormX = ($curAr['w'] > 0) ? max(0.0, min(1.0, ($absX - $curAr['x']) / $curAr['w'])) : $dnx;
-                    $roiNormY = ($curAr['h'] > 0) ? max(0.0, min(1.0, ($absY - $curAr['y']) / $curAr['h'])) : $dny;
-                    $error_log_msg .= sprintf(
-                        " abs=(%.1f,%.1f) roi_norm=(%.4f,%.4f)",
-                        $absX, $absY, $roiNormX, $roiNormY
-                    );
-                    error_log($error_log_msg);
-                }
-            }
-                $dnx = max(0.0, min(1.0, (float)($d['norm_x'] ?? 0) / $dotDivisor));
-                $dny = max(0.0, min(1.0, (float)($d['norm_y'] ?? 0) / $dotDivisor));
+            foreach ($gData['source_dots'] ?? [] as $d) {
+                $dnx = toNorm01($d['norm_x'] ?? 0);
+                $dny = toNorm01($d['norm_y'] ?? 0);
                 if (!empty($cropImg)) {
                     $snapped = snapDotToNearestDarkBulletInImage($cropImg, $dnx, $dny, $cropW, $cropH, (string)($gData['direction'] ?? 'vertical'), 'source');
                     $dnx = $snapped['norm_x'];
                     $dny = $snapped['norm_y'];
                 }
-
                 $absX = $cropX + $dnx * $cropW;
-
                 $absY = $cropY + $dny * $cropH;
-
-
-
                 $roiNormX = ($curAr['w'] > 0) ? max(0.0, min(1.0, ($absX - $curAr['x']) / $curAr['w'])) : $dnx;
-
                 $roiNormY = ($curAr['h'] > 0) ? max(0.0, min(1.0, ($absY - $curAr['y']) / $curAr['h'])) : $dny;
-
-
-
                 $normSourceDots[] = [
-
                     'label'      => (string)($d['label'] ?? ''),
-
                     'abs_x'      => (float)$absX,
-
                     'abs_y'      => (float)$absY,
-
                     'roi_norm_x' => (float)$roiNormX,
-
                     'roi_norm_y' => (float)$roiNormY,
-
                     'item_box'   => $d['item_box'] ?? null
-
                 ];
-
             }
-
-
 
             $normTargetDots = [];
-
-
-            // [DEBUG] 검증 2: target_dots 좌표 변환 단계별 로깅
-            if (!empty($gData['target_dots'])) {
-                foreach ($gData['target_dots'] ?? [] as $tIdx => $d) {
-                    $origNX = (float)($d['norm_x'] ?? 0);
-                    $origNY = (float)($d['norm_y'] ?? 0);
-                    $dnx = max(0.0, min(1.0, $origNX / $dotDivisor));
-                    $dny = max(0.0, min(1.0, $origNY / $dotDivisor));
-                    $error_log_msg = sprintf(
-                        "  [target_dot[%d]] gemini_norm=(%.4f,%.4f) "
-                        . "dnx_before_snap=(%.4f,%.4f)",
-                        $tIdx, $origNX, $origNY, $dnx, $dny
-                    );
-                    if (!empty($cropImg)) {
-                        $snapped = snapDotToNearestDarkBulletInImage($cropImg, $dnx, $dny, $cropW, $cropH,
-                            (string)($gData['direction'] ?? 'vertical'), 'target');
-                        $dnx = $snapped['norm_x'];
-                        $dny = $snapped['norm_y'];
-                        $error_log_msg .= sprintf(
-                            " snap=(%.4f,%.4f) darkCount=%d",
-                            $snapped['norm_x'], $snapped['norm_y'],
-                            $snapped['darkCount'] ?? -1
-                        );
-                    }
-                    $absX = $cropX + $dnx * $cropW;
-                    $absY = $cropY + $dny * $cropH;
-                    $roiNormX = ($curAr['w'] > 0) ? max(0.0, min(1.0, ($absX - $curAr['x']) / $curAr['w'])) : $dnx;
-                    $roiNormY = ($curAr['h'] > 0) ? max(0.0, min(1.0, ($absY - $curAr['y']) / $curAr['h'])) : $dny;
-                    $error_log_msg .= sprintf(
-                        " abs=(%.1f,%.1f) roi_norm=(%.4f,%.4f)",
-                        $absX, $absY, $roiNormX, $roiNormY
-                    );
-                    error_log($error_log_msg);
-                }
-            }
-
             foreach ($gData['target_dots'] ?? [] as $d) {
-                $dnx = max(0.0, min(1.0, (float)($d['norm_x'] ?? 0) / $dotDivisor));
-                $dny = max(0.0, min(1.0, (float)($d['norm_y'] ?? 0) / $dotDivisor));
+                $dnx = toNorm01($d['norm_x'] ?? 0);
+                $dny = toNorm01($d['norm_y'] ?? 0);
                 if (!empty($cropImg)) {
                     $snapped = snapDotToNearestDarkBulletInImage($cropImg, $dnx, $dny, $cropW, $cropH, (string)($gData['direction'] ?? 'vertical'), 'target');
                     $dnx = $snapped['norm_x'];
                     $dny = $snapped['norm_y'];
                 }
-
                 $absX = $cropX + $dnx * $cropW;
-
                 $absY = $cropY + $dny * $cropH;
-
-
-
                 $roiNormX = ($curAr['w'] > 0) ? max(0.0, min(1.0, ($absX - $curAr['x']) / $curAr['w'])) : $dnx;
-
                 $roiNormY = ($curAr['h'] > 0) ? max(0.0, min(1.0, ($absY - $curAr['y']) / $curAr['h'])) : $dny;
-
-
-
                 $normTargetDots[] = [
-
                     'label'      => (string)($d['label'] ?? ''),
-
                     'abs_x'      => (float)$absX,
-
                     'abs_y'      => (float)$absY,
-
                     'roi_norm_x' => (float)$roiNormX,
-
                     'roi_norm_y' => (float)$roiNormY,
-
                     'item_box'   => $d['item_box'] ?? null
-
                 ];
-
             }
-
-
-
 
             $r['matching_info'] = [
                 'is_matching'        => true,
@@ -881,9 +607,7 @@ if (!function_exists('autoAnalyzeMatchingRoisServerSide')) {
                 'analyzed_at'        => date('Y-m-d H:i:s')
             ];
             if (!empty($cropImg)) { imagedestroy($cropImg); $cropImg = null; }
-
             if (!empty($srcImg)) { imagedestroy($srcImg); $srcImg = null; }
-
             $r['matching_direction'] = $r['matching_info']['direction'];
 
             // 3. 정답이 비어있고 Gemini가 pairs를 감지한 경우 자동 보완
@@ -900,3 +624,4 @@ if (!function_exists('autoAnalyzeMatchingRoisServerSide')) {
 
         return $analyzedCount;
     }
+}

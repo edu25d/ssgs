@@ -414,6 +414,37 @@ if (!function_exists('extractRoisFromUpstageData')) {
                 }
             }
 
+            // 문항 범위 내의 괄호 유무 확인 (박스 vs 서술형 답안 밑줄 판별용)
+            $qBrackets = [];
+            if (!empty($pageBracketsList)) {
+                foreach ($pageBracketsList as $bIdx => $b) {
+                    $bMidX = (float)($b['midX'] ?? ($b['x'] + $b['w'] / 2));
+                    $bMidY = (float)($b['midY'] ?? ($b['y'] + $b['h'] / 2));
+                    $bIsLeft = ($bMidX < $pw * 0.52);
+                    if ($pw > 800 && $bIsLeft !== $isLeftCol) continue;
+                    if ($bMidY < $qCanvasY1 - 20) continue;
+                    if ($nextQY !== null && $bMidY >= $nextQY - 8) continue;
+                    if ($nextQY === null && $bMidY > $ph * 0.96) continue;
+                    if ($bMidX < $qCanvasX1 + 25) continue;
+                    $qBrackets[] = $b;
+                }
+            }
+
+            // 문항 범위 내의 폭넓은 밑줄(w >= 180) 수집
+            $wideUnderlines = [];
+            if (!empty($pageUnderlinesList)) {
+                foreach ($pageUnderlinesList as $uLine) {
+                    $ux = isset($uLine['normX']) ? ((float)$uLine['normX'] * $pw) : (float)($uLine['x'] ?? 0);
+                    $uy = isset($uLine['normY']) ? ((float)$uLine['normY'] * $ph) : (float)($uLine['y'] ?? 0);
+                    $uw = isset($uLine['normW']) ? ((float)$uLine['normW'] * $pw) : (float)($uLine['w'] ?? 0);
+                    $uIsLeft = isset($uLine['isLeft']) ? (bool)$uLine['isLeft'] : ($ux < $pw * 0.52);
+                    if ($uIsLeft === $isLeftCol && $uy >= $qCanvasY1 - 10 && $uy <= $qMaxY && $uw >= 180) {
+                        $wideUnderlines[] = ['x' => $ux, 'y' => $uy, 'w' => $uw];
+                    }
+                }
+            }
+            $wuCount = count($wideUnderlines);
+
             // 2) 가로선 교차 결합(underline + header_line): 지문/보기 테두리 상자 복원 (단, 밑줄끼리의 결합은 엄격 배제)
             if (!empty($pageUnderlinesList) && !empty($pageHeaderLinesList)) {
                 foreach ($pageUnderlinesList as $uLine) {
@@ -431,12 +462,75 @@ if (!function_exists('extractRoisFromUpstageData')) {
                         if ($hIsLeft !== $isLeftCol || $hy < $qCanvasY1 - 10 || $hy > $qMaxY) continue;
 
                         $dyBox = abs($hy - $uy);
-                        if (abs($ux - $hx) < 35 && abs($uw - $hw) < 40 && $dyBox >= 30 && $dyBox <= 320) {
+                        if (abs($ux - $hx) < 35 && abs($uw - $hw) < 40 && $dyBox >= 60 && $dyBox <= 320) {
+                            if (empty($qBrackets) && $wuCount <= 2) continue;
+                            if (empty($qBrackets)) {
+                                $hasLineBelow = false;
+                                foreach ($wideUnderlines as $otherLine) {
+                                    if ($otherLine['y'] > max($uy, $hy) + 30) {
+                                        $hasLineBelow = true;
+                                        break;
+                                    }
+                                }
+                                if (!$hasLineBelow) continue;
+                            }
                             $curBoxes[] = [
                                 'x1' => min($ux, $hx),
                                 'x2' => max($ux + $uw, $hx + $hw),
                                 'y1' => min($uy, $hy),
                                 'y2' => max($uy, $hy)
+                            ];
+                        }
+                    }
+                }
+            }
+
+            // 2-2) 폭이 넓은 가로선 쌍(underline + underline) 결합: <보기>/지문 박스 테두리 복원 (Q4 및 Q13 등)
+            // 객관식/단답형뿐 아니라 서술형 문항에서도 보기 상자(상하 폭 >= 60px) 복원
+            if ($wuCount >= 2) {
+                for ($wi = 0; $wi < $wuCount; $wi++) {
+                    for ($wj = $wi + 1; $wj < $wuCount; $wj++) {
+                        $l1 = $wideUnderlines[$wi];
+                        $l2 = $wideUnderlines[$wj];
+                        $dx = abs($l1['x'] - $l2['x']);
+                        $dw = abs($l1['w'] - $l2['w']);
+                        $dy = abs($l1['y'] - $l2['y']);
+                        if ($dx <= 25 && $dw <= 30 && $dy >= 60 && $dy <= 350) {
+                            // 중간에 다른 가로선이 끼어있는 건너뛴 결합 배제
+                            $hasIntermediateLine = false;
+                            for ($wk = $wi + 1; $wk < $wj; $wk++) {
+                                $lk = $wideUnderlines[$wk];
+                                if ($lk['y'] > min($l1['y'], $l2['y']) + 5 && $lk['y'] < max($l1['y'], $l2['y']) - 5) {
+                                    $hasIntermediateLine = true;
+                                    break;
+                                }
+                            }
+                            if ($hasIntermediateLine) continue;
+
+                            // 문항 내에 괄호가 전혀 없고 밑줄이 2줄 이하인 경우:
+                            // 이는 학생 서술형 답안 작성선이며, 절대로 상자(Box)가 아님!
+                            if (empty($qBrackets) && $wuCount <= 2) {
+                                continue;
+                            }
+
+                            // 문항 내에 괄호가 전혀 없는 서술형 문항의 경우:
+                            // 상자 아래에 별도의 답안 밑줄이 최소 1개 이상 존재해야 함 (보기상자 + 답안밑줄 구조)
+                            if (empty($qBrackets)) {
+                                $hasLineBelow = false;
+                                foreach ($wideUnderlines as $otherLine) {
+                                    if ($otherLine['y'] > max($l1['y'], $l2['y']) + 30) {
+                                        $hasLineBelow = true;
+                                        break;
+                                    }
+                                }
+                                if (!$hasLineBelow) continue;
+                            }
+
+                            $curBoxes[] = [
+                                'x1' => min($l1['x'], $l2['x']),
+                                'x2' => max($l1['x'] + $l1['w'], $l2['x'] + $l2['w']),
+                                'y1' => min($l1['y'], $l2['y']),
+                                'y2' => max($l1['y'], $l2['y'])
                             ];
                         }
                     }
@@ -464,13 +558,8 @@ if (!function_exists('extractRoisFromUpstageData')) {
 
             // 방안 A: PDF.js 추출 괄호 중 최적 매칭 검색 (4대 기하 배제 규칙 & 다형성 행 추적)
             $matchedBrackets = [];
-            // 순수 서술형 문항(소문항 키워드 없고 발문 괄호도 없는 경우) 및 선잇기 문항은 괄호 매칭 우회하여 다음 문항 괄호 탈취 방지
-            $hasHeadingBracket = (mb_strpos($q['cleanText'], '(') !== false && mb_strpos($q['cleanText'], ')') !== false)
-                              || (mb_substr($q['cleanText'], -1) === '(');
-            $hasSubKeywords = (bool)@preg_match('/각각|모두|○표|○\s*표|두\s*가지|짝\s*지|기호|번호/u', $fullQText);
-            $isPureSubjectiveEssay = $isSubjective && !$hasHeadingBracket && !$hasSubKeywords;
-
-            $candidateBrackets = ($isMatchingLineQuestion || $isPureSubjectiveEssay) ? [] : $pageBracketsList;
+            // 선잇기 문항은 전용 파이프라인에서 처리되므로 괄호 매칭 우회
+            $candidateBrackets = $isMatchingLineQuestion ? [] : $pageBracketsList;
 
             if (!empty($candidateBrackets)) {
                 $candidates = [];
@@ -536,8 +625,8 @@ if (!function_exists('extractRoisFromUpstageData')) {
                     return !$c['isInsideBox'] && !$c['isNonEmptyBracket'];
                 }));
 
-                // [규칙 4] 장폭 정답 괄호(w >= 120px) 우선 채택 (하단 정답란 우선 바인딩)
-                $wideBrackets = array_values(array_filter($validList, function($c) { return $c['w'] >= 120; }));
+                // [규칙 4] 장폭 정답 괄호(w >= 100px) 우선 채택 (하단 정답란 우선 바인딩)
+                $wideBrackets = array_values(array_filter($validList, function($c) { return $c['w'] >= 100; }));
                 if (!empty($wideBrackets)) {
                     $validList = $wideBrackets;
                 } else {
@@ -839,7 +928,9 @@ if (!function_exists('extractRoisFromUpstageData')) {
                 if ($subScore <= 0) $subScore = 1;
 
                 // 소문항 답안란 단위 type은 1차 유형 기준으로 결정하고, 소문항 여부는 2차 분류로 표현
-                $subBaseType = $isMatchingLineQuestion ? 'matching_line' : ($isSubjective ? 'subjective' : ($isShortAnswer ? 'short_answer' : 'objective'));
+                $effectiveSubjective = $isSubjective && empty($matchedBrackets);
+                $effectiveShortAnswer = $isShortAnswer || (!empty($matchedBrackets) && $isSubjective);
+                $subBaseType = $isMatchingLineQuestion ? 'matching_line' : ($effectiveSubjective ? 'subjective' : ($effectiveShortAnswer ? 'short_answer' : 'objective'));
 
                 foreach ($matchedBrackets as $subIdx => $mRoi) {
                     $subNum = $subIdx + 1;
@@ -859,7 +950,9 @@ if (!function_exists('extractRoisFromUpstageData')) {
                     ];
                 }
             } else {
-                $qFinalType = $isMatchingLineQuestion ? 'matching_line' : ($isSubjective ? 'subjective' : ($isShortAnswer ? 'short_answer' : 'objective'));
+                $effectiveSubjective = $isSubjective && empty($matchedBrackets);
+                $effectiveShortAnswer = $isShortAnswer || (!empty($matchedBrackets) && $isSubjective);
+                $qFinalType = $isMatchingLineQuestion ? 'matching_line' : ($effectiveSubjective ? 'subjective' : ($effectiveShortAnswer ? 'short_answer' : 'objective'));
                 $rois[] = [
                     'id'          => $q['num'],
                     'sub_id'      => null,

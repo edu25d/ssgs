@@ -175,8 +175,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
 
                         // 선잇기 문항 감지 시 Gemini Vision 자동 크롭 및 정밀 분석 실행 (문항 시작~다음 문항 직전 영역 분석)
-                        require_once APP_ROOT . '/includes/common/gemini_matching.php';
-                        autoAnalyzeMatchingRoisServerSide($extractedRois, $pagesData);
+                        try {
+                            require_once APP_ROOT . '/includes/common/gemini_matching.php';
+                            autoAnalyzeMatchingRoisServerSide($extractedRois, $pagesData);
+                        } catch (Throwable $e) {
+                            error_log("[Upload] autoAnalyzeMatchingRoisServerSide error: " . $e->getMessage());
+                        }
 
                         if (!empty($extractedRois)) {
                             $initialRoi = json_encode($extractedRois, JSON_UNESCAPED_UNICODE);
