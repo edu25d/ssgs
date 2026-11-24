@@ -317,7 +317,7 @@ CRITICAL ANSWER KEY GUIDANCE (공식 정답표 정보):
                 CURLOPT_POST           => true,
                 CURLOPT_POSTFIELDS     => json_encode($payload),
                 CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
-                CURLOPT_TIMEOUT        => 14,
+                CURLOPT_TIMEOUT        => 20,
                 CURLOPT_SSL_VERIFYPEER => false
             ]);
 
