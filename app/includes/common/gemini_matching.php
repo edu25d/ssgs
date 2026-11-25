@@ -687,24 +687,49 @@ if (!function_exists('gradeMatchingLinesLocal')) {
             ];
         }
 
-        $detectedPairs = [];
-
+        // 크롭 이미지 패딩(1.15배) 보정 좌표 계산 및 기준점 스냅
+        $parsedSourceDots = [];
         foreach ($sourceDots as $sIdx => $sDot) {
             $sLabel = trim((string)($sDot['label'] ?? ('(' . ($sIdx + 1) . ')')));
-            $sNormX = toNorm01($sDot['roi_norm_x'] ?? ($sDot['norm_x'] ?? 0.2));
-            $sNormY = toNorm01($sDot['roi_norm_y'] ?? ($sDot['norm_y'] ?? 0.5));
-            $sx = (int)round($sNormX * $w);
-            $sy = (int)round($sNormY * $h);
+            $origNormX = toNorm01($sDot['roi_norm_x'] ?? ($sDot['norm_x'] ?? 0.2));
+            $origNormY = toNorm01($sDot['roi_norm_y'] ?? ($sDot['norm_y'] ?? 0.5));
+            // 1.15 마진 보정 (submit_images.php 크롭 마진 대응)
+            $adjNormX = ($origNormX + 0.075) / 1.15;
+            $adjNormY = ($origNormY + 0.075) / 1.15;
+            // 인쇄된 점으로 정밀 스냅
+            $snapped = snapDotToNearestDarkBulletInImage($cropImg, $adjNormX, $adjNormY, $w, $h);
+            $parsedSourceDots[] = [
+                'label' => $sLabel,
+                'x'     => (int)round($snapped['norm_x'] * $w),
+                'y'     => (int)round($snapped['norm_y'] * $h)
+            ];
+        }
 
-            $bestTargetLabel = '';
-            $bestTargetScore = 0.0;
+        $parsedTargetDots = [];
+        foreach ($targetDots as $tIdx => $tDot) {
+            $tLabel = trim((string)($tDot['label'] ?? chr(ord('A') + $tIdx)));
+            $origNormX = toNorm01($tDot['roi_norm_x'] ?? ($tDot['norm_x'] ?? 0.8));
+            $origNormY = toNorm01($tDot['roi_norm_y'] ?? ($tDot['norm_y'] ?? 0.5));
+            $adjNormX = ($origNormX + 0.075) / 1.15;
+            $adjNormY = ($origNormY + 0.075) / 1.15;
+            $snapped = snapDotToNearestDarkBulletInImage($cropImg, $adjNormX, $adjNormY, $w, $h);
+            $parsedTargetDots[] = [
+                'label' => $tLabel,
+                'x'     => (int)round($snapped['norm_x'] * $w),
+                'y'     => (int)round($snapped['norm_y'] * $h)
+            ];
+        }
 
-            foreach ($targetDots as $tIdx => $tDot) {
-                $tLabel = trim((string)($tDot['label'] ?? chr(ord('A') + $tIdx)));
-                $tNormX = toNorm01($tDot['roi_norm_x'] ?? ($tDot['norm_x'] ?? 0.8));
-                $tNormY = toNorm01($tDot['roi_norm_y'] ?? ($tDot['norm_y'] ?? 0.5));
-                $tx = (int)round($tNormX * $w);
-                $ty = (int)round($tNormY * $h);
+        // 모든 (시작점 - 도착점) 쌍에 대해 광선투사 선분 밀도 계산
+        $candidatePairs = [];
+
+        foreach ($parsedSourceDots as $s) {
+            $sx = $s['x'];
+            $sy = $s['y'];
+
+            foreach ($parsedTargetDots as $t) {
+                $tx = $t['x'];
+                $ty = $t['y'];
 
                 $dist = hypot($tx - $sx, $ty - $sy);
                 if ($dist < 15) continue;
@@ -717,8 +742,10 @@ if (!function_exists('gradeMatchingLinesLocal')) {
                 $sampleCount = 0;
                 $darkHits = 0;
 
-                $startDist = max(15.0, $dist * 0.15);
-                $endDist   = min($dist - 15.0, $dist * 0.85);
+                $startDist = max(10.0, $dist * 0.15);
+                $endDist   = min($dist - 10.0, $dist * 0.85);
+                // 학생이 손으로 긋거나 곡선으로 휜 선 및 연필 스케치 대응 (동적 횡방향 탐색 폭)
+                $maxBand   = min(12, max(6, (int)round($dist * 0.08)));
 
                 for ($step = $startDist; $step <= $endDist; $step += 2.0) {
                     $sampleCount++;
@@ -726,7 +753,7 @@ if (!function_exists('gradeMatchingLinesLocal')) {
                     $py = $sy + $dy * $step;
 
                     $bandDarkHit = false;
-                    for ($band = -8; $band <= 8; $band += 1) {
+                    for ($band = -$maxBand; $band <= $maxBand; $band += 1) {
                         $qx = (int)round($px + $nx * $band);
                         $qy = (int)round($py + $ny * $band);
 
@@ -735,7 +762,9 @@ if (!function_exists('gradeMatchingLinesLocal')) {
                             $r = ($rgb >> 16) & 0xFF;
                             $g = ($rgb >> 8) & 0xFF;
                             $b = $rgb & 0xFF;
-                            if ($r < 155 && $g < 155 && $b < 155) {
+                            $gray = $r * 0.299 + $g * 0.587 + $b * 0.114;
+                            // 흰 배경(약 220~255) 대비 연필/볼펜 선(gray < 185) 판정
+                            if ($gray < 185) {
                                 $bandDarkHit = true;
                                 break;
                             }
@@ -748,18 +777,33 @@ if (!function_exists('gradeMatchingLinesLocal')) {
                 }
 
                 $density = $sampleCount > 0 ? ($darkHits / $sampleCount) : 0.0;
-                if ($density > $bestTargetScore) {
-                    $bestTargetScore = $density;
-                    $bestTargetLabel = $tLabel;
-                }
-            }
-
-            if ($bestTargetScore >= 0.18 && !empty($bestTargetLabel)) {
-                $detectedPairs[] = [
-                    'from'       => $sLabel,
-                    'to'         => $bestTargetLabel,
-                    'confidence' => round($bestTargetScore, 2)
+                $candidatePairs[] = [
+                    'from'       => $s['label'],
+                    'to'         => $t['label'],
+                    'confidence' => round($density, 3)
                 ];
+            }
+        }
+
+        // 최고 점수 순 1:1 매칭 (Greedy Best Match)
+        usort($candidatePairs, function($a, $b) {
+            return ($b['confidence'] <=> $a['confidence']);
+        });
+
+        $detectedPairs = [];
+        $usedFrom = [];
+        $usedTo   = [];
+
+        foreach ($candidatePairs as $cp) {
+            // 임계값 0.20 이상이고 아직 할당되지 않은 시작점/도착점인 경우
+            if ($cp['confidence'] >= 0.20 && !in_array($cp['from'], $usedFrom, true) && !in_array($cp['to'], $usedTo, true)) {
+                $detectedPairs[] = [
+                    'from'       => $cp['from'],
+                    'to'         => $cp['to'],
+                    'confidence' => $cp['confidence']
+                ];
+                $usedFrom[] = $cp['from'];
+                $usedTo[]   = $cp['to'];
             }
         }
 
