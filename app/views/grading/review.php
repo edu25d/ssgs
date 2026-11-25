@@ -44,7 +44,9 @@ try {
 if (!$info) {
     die("과제를 찾을 수 없거나 열람 권한이 없습니다.");
 }
-$examName = $info ? ($info['template_name'] . ($info['class_name'] ? ' - ' . $info['class_name'] : '')) : '평가 점검';
+$templateName = $info['template_name'] ?? '평가 점검';
+$className    = $info['class_name'] ?? '';
+$examName     = $templateName . ($className ? ' - ' . $className : '');
 $templateRois = [];
 if (!empty($info['roi_data'])) {
     $templateRois = json_decode($info['roi_data'], true) ?: [];
@@ -99,215 +101,494 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title><?= e($examName) ?> - 채점 현황 점검</title>
+    <title><?= e($templateName) ?><?= $className ? ' (' . e($className) . ')' : '' ?> - 채점 검수</title>
     <link rel="stylesheet" href="/public/assets/css/dashboard.css">
     <style>
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", Roboto, sans-serif; 
             background: #f8fafc; 
             color: #0f172a;
-            padding: 20px 24px; 
+            padding: 12px 20px; 
             margin: 0; 
             padding-bottom: 70px; 
         }
-        .header { 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            background: white; 
-            padding: 14px 20px; 
-            border-radius: 12px; 
-            box-shadow: 0 1px 3px rgba(0,0,0,0.06); 
+
+        /* 1줄 통합 슬림 헤더 */
+        .navbar-compact {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #ffffff;
+            height: 52px;
+            padding: 0 16px;
+            border-radius: 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+            margin-bottom: 8px;
+            gap: 12px;
+        }
+        .nav-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+            flex-shrink: 1;
+        }
+        .btn-icon-back {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            color: #334155;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s ease;
+            flex-shrink: 0;
+        }
+        .btn-icon-back:hover {
+            background: #e2e8f0;
+            color: #0f172a;
+        }
+        .badge-class {
+            background: #f1f5f9;
+            color: #334155;
+            border: 1px solid #cbd5e1;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 800;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .exam-title-wrap {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 0;
+            overflow: hidden;
+        }
+        .exam-title {
+            font-size: 1.05rem;
+            font-weight: 800;
+            color: #0f172a;
+            margin: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .screen-context {
+            font-size: 0.86rem;
+            color: #64748b;
+            font-weight: 600;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .nav-center {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+        .segmented-control {
+            display: flex;
+            gap: 2px;
+            background: #f1f5f9;
+            padding: 3px;
+            border-radius: 8px;
             border: 1px solid #e2e8f0;
         }
-        .header-left { display: flex; align-items: center; gap: 14px; }
-        .header-left h2 { font-size: 1.25rem; font-weight: 800; color: #0f172a; margin: 0; }
-        .btn-back { 
-            padding: 7px 14px; 
-            background: #f1f5f9; 
-            color: #334155; 
-            border: 1px solid #cbd5e1; 
-            border-radius: 8px; 
-            font-size: 0.88rem; 
-            font-weight: 700; 
-            cursor: pointer; 
-            transition: all 0.15s ease; 
-            text-decoration: none;
+        .seg-btn {
+            padding: 5px 12px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 0.84rem;
+            cursor: pointer;
+            background: transparent;
+            color: #475569;
+            transition: all 0.15s ease;
+        }
+        .seg-btn.active {
+            background: white;
+            color: #0f172a;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .chip-filter {
+            padding: 5px 11px;
+            border-radius: 7px;
+            border: 1.5px solid #cbd5e1;
+            font-size: 0.82rem;
+            font-weight: 700;
+            cursor: pointer;
+            background: white;
+            color: #334155;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.15s ease;
+        }
+        .chip-filter:hover { background: #f8fafc; }
+        .chip-filter.active {
+            background: #eff6ff;
+            color: #2563eb;
+            border-color: #93c5fd;
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+        .badge-pending-pulse {
+            background: #fffbeb;
+            border: 1px solid #fde68a;
+            color: #b45309;
+            padding: 4px 10px;
+            border-radius: 16px;
+            font-size: 0.8rem;
+            font-weight: 800;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: 0.15s;
+            animation: pendingPulse 2s infinite ease-in-out;
+        }
+        @keyframes pendingPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
+            50% { box-shadow: 0 0 0 5px rgba(245, 158, 11, 0); }
+        }
+        .badge-pending-pulse:hover {
+            background: #fef3c7;
+        }
+
+        /* 정답 공개 스위치 */
+        .toggle-switch-label {
             display: inline-flex;
             align-items: center;
             gap: 6px;
-        }
-        .btn-back:hover { background: #e2e8f0; color: #0f172a; }
-        
-        .controls-wrapper { 
-            display: flex; 
-            justify-content: flex-start; 
-            align-items: center; 
-            margin: 16px 0 12px 0; 
-            gap: 12px; 
-        }
-        .view-toggle-container { 
-            display: flex; 
-            gap: 4px; 
-            background: #e2e8f0; 
-            padding: 4px; 
-            border-radius: 10px; 
-        }
-        .toggle-btn { 
-            padding: 7px 16px; 
-            border: none; 
-            border-radius: 7px; 
-            font-weight: 700; 
-            font-size: 0.92rem; 
-            cursor: pointer; 
-            background: transparent; 
-            color: #475569; 
-            transition: all 0.15s ease; 
-        }
-        .toggle-btn.active { 
-            background: white; 
-            color: #0f172a; 
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1); 
-        }
-        .filter-label { 
-            background: white; 
-            padding: 7px 14px; 
-            border-radius: 8px; 
-            border: 1px solid #cbd5e1; 
-            font-weight: 700; 
-            cursor: pointer; 
-            user-select: none; 
-            box-shadow: 0 1px 2px rgba(0,0,0,0.03); 
-            font-size: 0.88rem; 
+            cursor: pointer;
+            font-size: 0.82rem;
+            font-weight: 700;
             color: #334155;
-            display: flex; 
-            align-items: center; 
-            gap: 8px; 
+            user-select: none;
+            padding: 4px 8px;
+            border-radius: 6px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
         }
-        .filter-label:hover { background: #f8fafc; }
-        
+        .toggle-switch-label input { display: none; }
+        .toggle-track {
+            width: 28px;
+            height: 16px;
+            background: #cbd5e1;
+            border-radius: 10px;
+            position: relative;
+            transition: background 0.2s;
+        }
+        .toggle-track::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 12px;
+            height: 12px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.2s;
+        }
+        .toggle-switch-label input:checked + .toggle-track {
+            background: #2563eb;
+        }
+        .toggle-switch-label input:checked + .toggle-track::after {
+            transform: translateX(12px);
+        }
+
+        .btn-nav-action {
+            padding: 5px 11px;
+            background: #ffffff;
+            color: #334155;
+            border: 1.5px solid #cbd5e1;
+            border-radius: 7px;
+            font-size: 0.82rem;
+            font-weight: 700;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.15s ease;
+        }
+        .btn-nav-action:hover { background: #f1f5f9; color: #0f172a; }
+
+        .sync-status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: #059669;
+        }
+        .sync-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10b981;
+            display: inline-block;
+            box-shadow: 0 0 0 2px rgba(16,185,129,0.25);
+        }
+
+        /* 더보기 드롭다운 */
+        .dropdown-wrap {
+            position: relative;
+        }
+        .btn-icon-more {
+            width: 32px;
+            height: 32px;
+            border-radius: 7px;
+            border: 1.5px solid #cbd5e1;
+            background: #ffffff;
+            color: #334155;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s ease;
+        }
+        .btn-icon-more:hover { background: #f1f5f9; }
+        .dropdown-menu {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            right: 0;
+            background: white;
+            min-width: 210px;
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+            border: 1px solid #e2e8f0;
+            z-index: 1000;
+            padding: 6px 0;
+        }
+        .dropdown-menu.show { display: block; }
+        .dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            padding: 8px 14px;
+            background: transparent;
+            border: none;
+            font-size: 0.84rem;
+            font-weight: 600;
+            color: #334155;
+            text-align: left;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background 0.12s;
+            box-sizing: border-box;
+        }
+        .dropdown-item:hover { background: #f8fafc; color: #0f172a; }
+        .dropdown-divider {
+            height: 1px;
+            background: #e2e8f0;
+            margin: 4px 0;
+        }
+
         /* 💡 상단 고정 헤더 패널 (스크롤 시에도 문항 탭과 모범답안 벤치마크 바가 항상 화면 상단에 고정) */
         .sticky-header-panel {
             position: sticky;
             top: 0;
             z-index: 500;
             background: #f8fafc;
-            padding-top: 8px;
-            padding-bottom: 6px;
+            padding-top: 4px;
+            padding-bottom: 4px;
             border-bottom: 1.5px solid #e2e8f0;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
         }
 
-        /* 탭 네비게이션: 흉물스러운 가로 스크롤바 숨김 */
+        /* 탭 네비게이션 래퍼 */
+        .sub-tabs-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            position: relative;
+            margin-bottom: 6px;
+        }
+        .tab-scroll-btn {
+            width: 28px;
+            height: 36px;
+            border: 1px solid #cbd5e1;
+            background: #ffffff;
+            border-radius: 6px;
+            color: #475569;
+            font-weight: bold;
+            font-size: 1.1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: 0.15s;
+            user-select: none;
+        }
+        .tab-scroll-btn:hover { background: #e2e8f0; color: #0f172a; }
+
         .sub-tabs { 
             display: flex; 
-            gap: 8px; 
+            gap: 6px; 
             overflow-x: auto; 
-            padding-bottom: 6px; 
-            margin-bottom: 8px; 
-            scrollbar-width: none; 
-            -ms-overflow-style: none; 
+            padding: 3px 2px; 
+            scroll-behavior: smooth;
+            flex-grow: 1;
+            scrollbar-width: thin; 
+            scrollbar-color: #cbd5e1 transparent; 
         }
-        .sub-tabs::-webkit-scrollbar { display: none; }
-        .sub-tab-item { 
-            padding: 7px 15px; 
+        .sub-tabs::-webkit-scrollbar { height: 4px; }
+        .sub-tabs::-webkit-scrollbar-track { background: transparent; }
+        .sub-tabs::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .sub-tabs::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* 컴팩트 문항 알약 (폭 42px) */
+        .sub-tab-pill { 
+            flex: 0 0 42px;
+            width: 42px;
+            height: 36px;
+            padding: 2px 0;
             background: white; 
             border: 1.5px solid #cbd5e1; 
-            border-radius: 20px; 
-            font-size: 0.88rem; 
-            font-weight: 700; 
-            color: #334155;
+            border-radius: 7px; 
             cursor: pointer; 
-            white-space: nowrap; 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
             transition: all 0.15s ease;
+            user-select: none;
+            box-sizing: border-box;
         }
-        .sub-tab-item:hover { border-color: #94a3b8; background: #f8fafc; }
-        .sub-tab-item.active { 
+        .sub-tab-pill:hover { border-color: #94a3b8; background: #f8fafc; }
+        .sub-tab-pill.active { 
             background: #1e293b; 
-            color: white; 
             border-color: #1e293b; 
             box-shadow: 0 2px 6px rgba(30,41,59,0.25);
         }
-        .sub-tab-item .type-badge { 
-            font-size: 0.75em; 
-            padding: 2px 6px; 
-            border-radius: 4px; 
-            margin-left: 5px; 
-            background: #f1f5f9; 
-            color: #475569; 
+        .sub-tab-pill.student-pill {
+            flex: 0 0 auto;
+            width: auto;
+            padding: 6px 12px;
+            font-size: 0.86rem;
         }
-        .sub-tab-item.active .type-badge { 
-            background: #334155; 
-            color: #f8fafc; 
+        .sub-tab-pill .pill-num {
+            font-size: 0.82rem;
+            font-weight: 800;
+            color: #334155;
+            line-height: 1.1;
         }
+        .sub-tab-pill.active .pill-num {
+            color: #ffffff;
+        }
+
+        /* 유형 표시 미니 닷 */
+        .type-dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            margin-top: 2px;
+        }
+        .type-dot.objective { background: #94a3b8; }
+        .type-dot.short_answer { background: #0284c7; }
+        .type-dot.subjective { background: #7c3aed; }
+        .type-dot.matching_line { background: #059669; }
+        .type-dot-multi {
+            display: flex;
+            gap: 2px;
+            margin-top: 2px;
+        }
+        .type-dot-multi span {
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            background: #d97706;
+        }
+        .sub-tab-pill.active .type-dot.objective { background: #cbd5e1; }
+        .sub-tab-pill.active .type-dot.short_answer { background: #38bdf8; }
+        .sub-tab-pill.active .type-dot.subjective { background: #c084fc; }
+        .sub-tab-pill.active .type-dot.matching_line { background: #34d399; }
+        .sub-tab-pill.active .type-dot-multi span { background: #fbbf24; }
 
         /* 💡 최상단 기준 모범답안 & 배점 벤치마크 바 */
         .benchmark-bar {
             background: #ffffff;
-            border: 1.5px solid #cbd5e1;
-            border-left: 5px solid #2563eb;
-            border-radius: 8px;
-            padding: 10px 16px;
+            border: 1px solid #cbd5e1;
+            border-left: 4px solid #2563eb;
+            border-radius: 7px;
+            padding: 6px 14px;
             margin-bottom: 2px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 14px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            gap: 12px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.03);
             flex-wrap: wrap;
         }
         .benchmark-info-left {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
             flex-wrap: wrap;
         }
         .benchmark-title {
-            font-size: 1.0rem;
+            font-size: 0.92rem;
             font-weight: 800;
             color: #0f172a;
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 5px;
         }
         .benchmark-answers-group {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             flex-wrap: wrap;
         }
         .benchmark-answer-tag {
             background: #eff6ff;
             border: 1px solid #bfdbfe;
             color: #1d4ed8;
-            padding: 4px 10px;
-            border-radius: 6px;
-            font-size: 0.88rem;
+            padding: 3px 8px;
+            border-radius: 5px;
+            font-size: 0.82rem;
             font-weight: 700;
         }
         .benchmark-badge-partial {
             background: #ecfdf5;
             border: 1px solid #a7f3d0;
             color: #047857;
-            padding: 3px 9px;
-            border-radius: 6px;
-            font-size: 0.8rem;
+            padding: 2px 7px;
+            border-radius: 5px;
+            font-size: 0.78rem;
             font-weight: 800;
         }
         .benchmark-badge-nopartial {
             background: #fef2f2;
             border: 1px solid #fecaca;
             color: #b91c1c;
-            padding: 3px 9px;
-            border-radius: 6px;
-            font-size: 0.8rem;
+            padding: 2px 7px;
+            border-radius: 5px;
+            font-size: 0.78rem;
             font-weight: 800;
         }
         
-        table { width: 100%; border-collapse: separate; border-spacing: 0 10px; }
+        table { width: 100%; border-collapse: separate; border-spacing: 0 6px; }
         th, td { 
-            padding: 12px 14px; 
-            background: white; 
+            padding: 6px 12px; 
             vertical-align: middle; 
             border-top: 1.5px solid #e2e8f0; 
             border-bottom: 1.5px solid #e2e8f0; 
@@ -315,45 +596,69 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
         }
         td:first-child { 
             border-left: 1.5px solid #e2e8f0; 
-            border-radius: 10px 0 0 10px; 
+            border-radius: 8px 0 0 8px; 
             width: 14%; 
             text-align: center; 
-            line-height: 1.4; 
+            line-height: 1.3; 
         }
-        td:nth-child(2) { text-align: left; padding: 10px 14px; width: 62%; } 
+        td:nth-child(2) { text-align: left; padding: 6px 12px; width: 62%; } 
         td:last-child { 
             border-right: 1.5px solid #e2e8f0; 
-            border-radius: 0 10px 10px 0; 
+            border-radius: 0 8px 8px 0; 
             width: 24%; 
             text-align: center; 
         }
         
-        /* 3색 상태 테두리 */
-        tr.pending td { border-top-color: #f1f5f9; border-bottom-color: #f1f5f9; }
-        tr.correct td { border-top-color: #d1fae5; border-bottom-color: #d1fae5; }
-        tr.incorrect td { border-top-color: #fee2e2; border-bottom-color: #fee2e2; }
-        tr.partial td { border-top-color: #fef3c7; border-bottom-color: #fef3c7; }
+        /* 4색 상태 전체 배경 틴트 복원 */
+        tr.correct td { 
+            background-color: #f0fdf4 !important; 
+            border-top-color: #bbf7d0 !important; 
+            border-bottom-color: #bbf7d0 !important; 
+        }
+        tr.correct td:first-child { border-left-color: #86efac !important; }
+        tr.correct td:last-child { border-right-color: #86efac !important; }
+
+        tr.incorrect td { 
+            background-color: #fef2f2 !important; 
+            border-top-color: #fecaca !important; 
+            border-bottom-color: #fecaca !important; 
+        }
+        tr.incorrect td:first-child { border-left-color: #fca5a5 !important; }
+        tr.incorrect td:last-child { border-right-color: #fca5a5 !important; }
+
+        tr.partial td { 
+            background-color: #fffbeb !important; 
+            border-top-color: #fde68a !important; 
+            border-bottom-color: #fde68a !important; 
+        }
+        tr.partial td:first-child { border-left-color: #fcd34d !important; }
+        tr.partial td:last-child { border-right-color: #fcd34d !important; }
+
+        tr.pending td { 
+            background-color: #ffffff !important; 
+            border-top-color: #e2e8f0 !important; 
+            border-bottom-color: #e2e8f0 !important; 
+        }
+        tr.pending td:first-child { border-left-color: #cbd5e1 !important; }
+        tr.pending td:last-child { border-right-color: #cbd5e1 !important; }
 
         /* Level 1: 학생 단위 (대문항 전체) 포커스 스타일 */
         tr.focused-box td {
-            background: #f8fafc !important;
             border-top: 2px solid #2563eb !important;
             border-bottom: 2px solid #2563eb !important;
-            box-shadow: 0 3px 12px rgba(37, 99, 235, 0.16) !important;
+            box-shadow: 0 0 0 1px #2563eb inset, 0 2px 8px rgba(37, 99, 235, 0.12) !important;
         }
         tr.focused-box td:first-child {
-            border-left: 5px solid #2563eb !important;
+            border-left: 4px solid #2563eb !important;
         }
         tr.focused-box td:last-child {
             border-right: 2px solid #2563eb !important;
         }
 
-        /* Level 2: 소문항 단위 포커스 시 부모 행 스타일 (살짝 옅어짐) */
+        /* Level 2: 소문항 단위 포커스 시 부모 행 스타일 */
         tr.focused-sub td {
-            background: #ffffff !important;
             border-top: 1.5px solid #94a3b8 !important;
             border-bottom: 1.5px solid #94a3b8 !important;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05) !important;
         }
         tr.focused-sub td:first-child {
             border-left: 4px solid #94a3b8 !important;
@@ -365,9 +670,9 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
         /* 3색 상태 뱃지 */
         .badge-status {
             display: inline-block;
-            padding: 3px 8px;
-            border-radius: 6px;
-            font-size: 0.8rem;
+            padding: 2px 7px;
+            border-radius: 5px;
+            font-size: 0.78rem;
             font-weight: 700;
         }
         .badge-pending { background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; }
@@ -377,73 +682,72 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
 
         .badge-appeal {
             display: inline-block;
-            padding: 3px 8px;
-            border-radius: 6px;
-            font-size: 0.78rem;
+            padding: 2px 6px;
+            border-radius: 5px;
+            font-size: 0.75rem;
             font-weight: 800;
             background: #f5f3ff;
             color: #6d28d9;
             border: 1px solid #ddd6fe;
         }
         
-        /* 🚫 박스 안의 박스 겹치기 완전 제거: 단일 플랫 소문항 패널 구조 */
+        /* 플랫 소문항 패널 구조 */
         .sub-items-row {
             display: flex;
-            gap: 14px;
+            gap: 10px;
             align-items: stretch;
             width: 100%;
         }
         .sub-crop-pane {
             flex: 1 1 0;
-            min-width: 220px;
+            min-width: 180px;
             position: relative;
             display: flex;
             align-items: center;
             justify-content: center;
             background: #ffffff;
-            border: 1.5px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 6px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            padding: 4px;
             cursor: pointer;
             transition: all 0.15s ease;
-            min-height: 180px;
+            min-height: 102px;
         }
         .sub-crop-pane:hover {
             border-color: #94a3b8;
-            background: #fafafa;
         }
-        /* Level 2 소문항 활성 포커스 스타일 (선명한 블루 링) */
+        /* Level 2 소문항 활성 포커스 스타일 */
         .sub-crop-pane.active {
             border-color: #2563eb !important;
             background: #eff6ff !important;
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25) !important;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.3) !important;
         }
 
-        /* 📸 크롭 이미지: 콩알만했던 높이를 175px로 시원하게 2배 확대! */
+        /* 📸 크롭 이미지: 높이 98px로 최적화 (현재의 60% 수준) */
         .crop-img-large { 
             max-width: 100%; 
-            height: 175px; 
+            height: 98px; 
             border-radius: 4px; 
             display: block; 
             object-fit: contain;
             background: transparent;
         }
 
-        /* 소문항 번호 미니멀 라벨 (카드 헤더 박스 완전 제거) */
+        /* 소문항 번호 미니멀 라벨 */
         .sub-pane-tag {
             position: absolute;
-            top: 6px;
-            left: 8px;
-            font-size: 0.82rem;
+            top: 4px;
+            left: 6px;
+            font-size: 0.78rem;
             font-weight: 800;
             color: #334155;
             display: inline-flex;
             align-items: center;
-            gap: 4px;
-            background: rgba(241, 245, 249, 0.88);
-            padding: 2px 7px;
+            gap: 3px;
+            background: rgba(241, 245, 249, 0.9);
+            padding: 1px 6px;
             border-radius: 4px;
-            backdrop-filter: blur(3px);
+            backdrop-filter: blur(2px);
             z-index: 4;
             border: 1px solid rgba(203, 213, 225, 0.6);
         }
@@ -453,32 +757,34 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
             border-color: #bfdbfe;
         }
 
-        /* 소문항 상태 뱃지 (우측 상단 오버레이) */
+        /* 소문항 상태 뱃지 */
         .sub-status-overlay {
             position: absolute;
-            top: 6px;
-            right: 8px;
+            top: 4px;
+            right: 6px;
             z-index: 4;
+            font-size: 0.74rem;
+            padding: 1px 5px;
         }
 
-        /* 🤖 AI 인식값 플로팅 오버레이 (세로 높이 갉아먹기 0px!) */
+        /* AI 인식값 플로팅 오버레이 */
         .ai-recognition-overlay {
             position: absolute;
-            bottom: 6px;
-            right: 8px;
-            font-size: 0.82rem;
+            bottom: 4px;
+            right: 6px;
+            font-size: 0.76rem;
             font-weight: 700;
-            padding: 3px 9px;
-            border-radius: 5px;
+            padding: 2px 7px;
+            border-radius: 4px;
             background: rgba(15, 23, 42, 0.82);
             color: #ffffff;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.18);
-            backdrop-filter: blur(4px);
+            box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+            backdrop-filter: blur(3px);
             z-index: 4;
             pointer-events: none;
             display: flex;
             align-items: center;
-            gap: 5px;
+            gap: 4px;
         }
         .ai-recognition-overlay b {
             color: #60a5fa;
@@ -491,7 +797,7 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
             background: rgba(185, 28, 28, 0.9);
         }
 
-        /* 크롭 확장 버튼 (호버 시에만 등장) */
+        /* 크롭 확장 버튼 */
         .expand-btn { 
             position: absolute; 
             background: rgba(37, 99, 235, 0.6); 
@@ -509,74 +815,89 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
             opacity: 1 !important; 
             background: rgba(37, 99, 235, 0.95); 
         }
-        .expand-top { top: 0; left: 0; right: 0; height: 8px; }
-        .expand-bottom { bottom: 0; left: 0; right: 0; height: 8px; }
-        .expand-left { top: 0; bottom: 0; left: 0; width: 8px; }
-        .expand-right { top: 0; bottom: 0; right: 0; width: 8px; }
+        .expand-top { top: 0; left: 0; right: 0; height: 7px; }
+        .expand-bottom { bottom: 0; left: 0; right: 0; height: 7px; }
+        .expand-left { top: 0; bottom: 0; left: 0; width: 7px; }
+        .expand-right { top: 0; bottom: 0; right: 0; width: 7px; }
         
         /* 버튼 스타일 */
+        .score-btn-group {
+            display: flex;
+            gap: 5px;
+            justify-content: center;
+        }
         .score-btn { 
-            padding: 8px 14px; 
-            font-size: 0.88em; 
+            padding: 6px 12px; 
+            font-size: 0.84em; 
             font-weight: 700; 
             border: 1.5px solid #cbd5e1; 
             border-radius: 6px; 
-            margin: 2px 3px; 
+            margin: 1px 2px; 
             cursor: pointer; 
             background: white; 
-            transition: all 0.15s ease; 
+            transition: all 0.12s ease; 
         }
-        .btn-o { color: #059669; border-color: #a7f3d0; background: #ecfdf5; } 
+        .btn-o { color: #047857; border-color: #a7f3d0; background: #ecfdf5; } 
         .btn-o:hover { background: #059669; color: white; border-color: #059669; }
-        .btn-x { color: #dc2626; border-color: #fecaca; background: #fef2f2; } 
+        .btn-x { color: #b91c1c; border-color: #fecaca; background: #fef2f2; } 
         .btn-x:hover { background: #dc2626; color: white; border-color: #dc2626; }
-        .btn-p { color: #d97706; border-color: #fde68a; background: #fffbeb; }
+        .btn-p { color: #b45309; border-color: #fde68a; background: #fffbeb; }
         .btn-p:hover { background: #d97706; color: white; border-color: #d97706; }
-        .btn-tab-drill { 
+        .btn-tab-drill-compact { 
             color: #2563eb; 
-            border-color: #bfdbfe; 
+            border: 1px solid #bfdbfe; 
             background: #eff6ff; 
-            font-size: 0.82em; 
-            padding: 6px 12px;
-            border-radius: 6px;
+            font-size: 0.78em; 
+            padding: 3px 8px;
+            border-radius: 5px;
             display: inline-block;
-            margin-top: 6px;
             cursor: pointer;
             font-weight: 700;
         }
-        .btn-tab-drill:hover { background: #2563eb; color: white; border-color: #2563eb; }
+        .btn-tab-drill-compact:hover { background: #2563eb; color: white; }
+        .btn-sub-exit {
+            background: #f1f5f9;
+            color: #475569;
+            font-size: 0.75rem;
+            padding: 3px 7px;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .btn-sub-exit:hover { background: #e2e8f0; color: #0f172a; }
         
-        .partial-input-wrapper { display: none; margin-top: 8px; }
+        .partial-input-wrapper { display: none; margin-top: 6px; }
         tr.partial-mode .partial-input-wrapper { display: block; }
-        .partial-input { width: 65px; padding: 5px; font-size: 1.05em; text-align: center; border: 2px solid #f59e0b; border-radius: 6px; font-weight: bold; outline: none; }
-        .empty-msg { text-align: center; padding: 50px; font-size: 1.1em; color: #64748b; }
+        .partial-input { width: 55px; padding: 3px; font-size: 0.95em; text-align: center; border: 2px solid #f59e0b; border-radius: 5px; font-weight: bold; outline: none; }
+        .empty-msg { text-align: center; padding: 40px; font-size: 1.05em; color: #64748b; }
 
         /* 부분점수 퀵 프리셋 버튼 */
         .preset-score-btn {
             padding: 2px 6px;
-            margin: 2px;
+            margin: 1px;
             border-radius: 4px;
             border: 1px solid #f59e0b;
             background: #fffbeb;
             color: #b45309;
-            font-size: 0.75rem;
+            font-size: 0.74rem;
             font-weight: 700;
             cursor: pointer;
-            transition: 0.15s;
+            transition: 0.12s;
         }
         .preset-score-btn:hover { background: #fde68a; }
 
-        /* 토스트 알림 (경고/안내 메시지) */
+        /* 토스트 알림 */
         #toastNotice {
             position: fixed;
-            top: 24px;
+            top: 20px;
             left: 50%;
             transform: translateX(-50%);
             background: #1e293b;
             color: white;
-            padding: 10px 20px;
+            padding: 8px 18px;
             border-radius: 8px;
-            font-size: 0.92rem;
+            font-size: 0.88rem;
             font-weight: 700;
             box-shadow: 0 4px 14px rgba(0,0,0,0.2);
             z-index: 2000;
@@ -585,47 +906,139 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
             gap: 8px;
             transition: opacity 0.2s;
         }
+
+        /* 듀얼 하단 고정 바 */
+        #bottomShortcutBar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 46px;
+            padding: 0 16px;
+            background: #0f172a;
+            color: #f8fafc;
+            border-top: 2px solid #2563eb;
+            font-size: 13px;
+            z-index: 1000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 -3px 12px rgba(0,0,0,0.15);
+        }
+        .bot-nav-wrap {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-bot-nav {
+            padding: 4px 9px;
+            background: #1e293b;
+            color: #f8fafc;
+            border: 1px solid #334155;
+            border-radius: 5px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: 0.12s;
+            user-select: none;
+        }
+        .btn-bot-nav:hover { background: #2563eb; border-color: #2563eb; }
+        .bot-scrubber {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+            max-width: 440px;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+        .bot-scrubber::-webkit-scrollbar { display: none; }
+        .bot-scrub-chip {
+            padding: 2px 7px;
+            border-radius: 4px;
+            background: #1e293b;
+            color: #94a3b8;
+            border: 1px solid #334155;
+            font-size: 0.76rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: 0.12s;
+            white-space: nowrap;
+        }
+        .bot-scrub-chip:hover { background: #334155; color: #fff; }
+        .bot-scrub-chip.active { background: #2563eb; color: #fff; border-color: #3b82f6; }
     </style>
 </head>
 <body>
 
     <div id="toastNotice"></div>
 
-    <div class="header">
-        <div class="header-left">
-            <h2>📋 <?= e($examName) ?> - 채점 현황 점검</h2>
-            <button class="btn-back" onclick="goBackAndReset()">⬅ 돌아가기</button>
+    <!-- PC 1줄 통합 슬림 헤더 바 -->
+    <header class="navbar-compact">
+        <div class="nav-left">
+            <button type="button" class="btn-icon-back" onclick="goBackAndReset()" title="과제 목록으로 돌아가기">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+            </button>
+            <?php if (!empty($className)): ?>
+                <span class="badge-class"><?= e($className) ?></span>
+            <?php endif; ?>
+            <div class="exam-title-wrap">
+                <h1 class="exam-title"><?= e($templateName) ?></h1>
+                <span class="screen-context">· 채점 검수</span>
+            </div>
         </div>
-        <div style="display: flex; align-items: center; gap: 10px;">
-            <a href="/views/grading/print_slips.php?assign_id=<?= $assignId ?>" class="btn-back" target="_blank">🖨️ 정오표 출력</a>
-            <a href="/views/grading/diagnose.php?assign_id=<?= $assignId ?>" class="btn-back" target="_blank">🔬 AI 정밀 진단</a>
-            <span id="syncStatus" style="color: #059669; font-weight: bold; font-size: 0.88rem;">🟢 동기화 완료</span>
-        </div>
-    </div>
 
-    <div class="controls-wrapper">
-        <div class="view-toggle-container">
-            <button class="toggle-btn active" id="btnModeQ" onclick="switchViewMode('question')">📝 문항별 모아보기</button>
-            <button class="toggle-btn" id="btnModeS" onclick="switchViewMode('student')">👤 학생별 모아보기</button>
+        <div class="nav-center">
+            <div class="segmented-control">
+                <button type="button" class="seg-btn active" id="btnModeQ" onclick="switchViewMode('question')">📝 문항별</button>
+                <button type="button" class="seg-btn" id="btnModeS" onclick="switchViewMode('student')">👤 학생별</button>
+            </div>
+            <button type="button" class="chip-filter" id="btnSubjectiveOnly" onclick="toggleFilter()">
+                <span>✍️ 주관식만</span>
+            </button>
         </div>
-        <label class="filter-label">
-            <input type="checkbox" id="chkSubjectiveOnly" onchange="toggleFilter()"> 주관식만 보기
-        </label>
-        <label class="filter-label" style="margin-left: auto;">
-            <input type="checkbox" id="chkShowAnswer" onchange="toggleAnswerVisibility()" <?= $showAnswer ? 'checked' : '' ?>>
-            <span>학생에게 모범 답안 공개</span>
-        </label>
-        <button type="button" id="btnSyncTemplate" class="btn-back" onclick="syncWithTemplate()" title="템플릿 에디터의 배점/정답을 재적용합니다">
-            <span>🔄 템플릿 재동기화</span>
-        </button>
-        <button type="button" id="btnRegradePending" class="btn-back" onclick="regradePending()" style="background:#eff6ff; color:#2563eb; border-color:#bfdbfe;" title="미판독/판독대기 문항을 즉시 채점합니다">
-            <span>⚡ 미판독 AI 채점</span>
-        </button>
-    </div>
+
+        <div class="nav-right">
+            <!-- 미판독 발생 시 동적 펄스 뱃지 노출 -->
+            <button type="button" id="btnPendingBadge" class="badge-pending-pulse" onclick="regradePending()" style="display:none;" title="미판독 문항을 즉시 AI 재채점합니다">
+                <span>⚡ 미판독 <b id="pendingCount">0</b>건 [채점]</span>
+            </button>
+
+            <!-- 정답 공개 토글 스위치 -->
+            <label class="toggle-switch-label" title="학생에게 모범 답안을 공개할지 여부를 설정합니다">
+                <input type="checkbox" id="chkShowAnswer" onchange="toggleAnswerVisibility()" <?= $showAnswer ? 'checked' : '' ?>>
+                <span class="toggle-track"></span>
+                <span>답안공개</span>
+            </label>
+
+            <a href="/views/grading/print_slips.php?assign_id=<?= $assignId ?>" class="btn-nav-action" target="_blank" title="학생 배부용 정오표를 인쇄합니다">
+                🖨️ 정오표
+            </a>
+
+            <!-- 동기화 상태 인디케이터 -->
+            <div id="syncStatus" class="sync-status-indicator" title="서버와 실시간 동기화 완료">
+                <span class="sync-dot" id="syncDot"></span>
+            </div>
+
+            <!-- 더보기 드롭다운 -->
+            <div class="dropdown-wrap">
+                <button type="button" class="btn-icon-more" onclick="toggleMoreMenu(event)" title="추가 작업 메뉴">⋮</button>
+                <div class="dropdown-menu" id="moreMenu">
+                    <button type="button" class="dropdown-item" onclick="syncWithTemplate()">🔄 템플릿 배점/정답 재동기화</button>
+                    <button type="button" class="dropdown-item" onclick="syncGoogleSheet()">📊 구글 시트로 최종 성적 반영</button>
+                    <div class="dropdown-divider"></div>
+                    <a href="/views/grading/diagnose.php?assign_id=<?= $assignId ?>" class="dropdown-item" target="_blank">🔬 AI 정밀 진단 (엔지니어용)</a>
+                </div>
+            </div>
+        </div>
+    </header>
 
     <!-- 💡 상단 고정 헤더 패널 (스크롤 시에도 문항 탭과 모범답안 벤치마크 바가 항상 화면 상단에 고정) -->
     <div class="sticky-header-panel">
-        <div class="sub-tabs" id="subTabsContainer"></div>
+        <div class="sub-tabs-wrapper">
+            <button type="button" class="tab-scroll-btn" onclick="scrollTabs(-1)" title="이전 문항 스크롤">‹</button>
+            <div class="sub-tabs" id="subTabsContainer"></div>
+            <button type="button" class="tab-scroll-btn" onclick="scrollTabs(1)" title="다음 문항 스크롤">›</button>
+        </div>
         <div id="benchmarkBar" class="benchmark-bar" style="display:none;"></div>
     </div>
 
@@ -633,18 +1046,16 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
         <tbody id="studentList"></tbody>
     </table>
 
-    <!-- 하단 단축키 가이드 바 (동적 전환) -->
-    <div id="bottomShortcutBar" style="position: fixed; bottom: 0; left: 0; right: 0; padding: 10px 24px; background: #0f172a; color: #f8fafc; border-top: 2px solid #2563eb; font-size: 13.5px; z-index: 1000; display: flex; justify-content: space-between; align-items: center;">
-        <div id="shortcutKeyText">
-            ⌨️ <b>단축키:</b> 
-            <span style="color:#34d399">[1] 전체 정답(만점)</span> | 
-            <span style="color:#f87171">[2] 전체 오답(0점)</span> | 
-            <span style="color:#60a5fa">[Tab] 소문항 개별 채점</span> | 
-            <span>[↑/↓] 학생 이동</span> | 
-            <span>[Backspace] 채점 취소</span>
+    <!-- 하단 듀얼 내비게이션 & 단축키 가이드 바 -->
+    <div id="bottomShortcutBar">
+        <div class="bot-nav-wrap">
+            <button type="button" class="btn-bot-nav" id="btnPrevQ" onclick="navigateFilter(-1)">‹ 이전</button>
+            <div class="bot-scrubber" id="botScrubber"></div>
+            <button type="button" class="btn-bot-nav" id="btnNextQ" onclick="navigateFilter(1)">다음 ›</button>
         </div>
-        <div style="color: #94a3b8; font-size: 12px;">
-            Shift + 방향키: 이미지 크롭 확장
+        <div id="shortcutKeyText"></div>
+        <div style="color: #94a3b8; font-size: 11.5px; white-space:nowrap;">
+            Shift+방향키: 크롭 확장 | [ / ] 문항 이동
         </div>
     </div>
 
@@ -738,7 +1149,8 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
         location.href = '/views/dashboard/main.php';
     }
 
-    document.getElementById('chkSubjectiveOnly').checked = showSubjectiveOnly;
+    const btnSubjInit = document.getElementById('btnSubjectiveOnly');
+    if (btnSubjInit) btnSubjInit.classList.toggle('active', showSubjectiveOnly);
     document.getElementById('btnModeQ').classList.toggle('active', viewMode === 'question');
     document.getElementById('btnModeS').classList.toggle('active', viewMode === 'student');
 
@@ -861,8 +1273,8 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
         fetch(`/api/grading/get_results.php?assign_id=${assignId}`)
             .then(res => res.json())
             .then(dataList => {
-                const statusElem = document.getElementById('syncStatus');
-                if (statusElem) statusElem.innerHTML = "<span style='color:#059669; font-weight:bold;'>🟢 동기화 완료</span>";
+                const statusDot = document.getElementById('syncDot');
+                if (statusDot) statusDot.style.background = '#10b981';
 
                 if (!Array.isArray(dataList) || dataList.length === 0) return;
 
@@ -902,13 +1314,72 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
                 }
             })
             .catch(() => {
-                const statusElem = document.getElementById('syncStatus');
-                if (statusElem) statusElem.innerHTML = "<span style='color:#f59e0b; font-weight:bold;'>🟡 동기화 확인 중</span>";
+                const statusDot = document.getElementById('syncDot');
+                if (statusDot) statusDot.style.background = '#f59e0b';
             });
     }
 
+    function updatePendingBadge() {
+        let pendingCount = 0;
+        if (Array.isArray(rawRowsData)) {
+            rawRowsData.forEach(r => {
+                if (r.type !== 'subjective' && (r.isAiPending || r.statusCode === -1)) {
+                    pendingCount++;
+                }
+            });
+        }
+        const badge = document.getElementById('btnPendingBadge');
+        const countEl = document.getElementById('pendingCount');
+        if (badge && countEl) {
+            countEl.textContent = pendingCount;
+            badge.style.display = (pendingCount > 0) ? 'inline-flex' : 'none';
+        }
+    }
+
+    function toggleMoreMenu(e) {
+        if (e) e.stopPropagation();
+        const menu = document.getElementById('moreMenu');
+        if (menu) menu.classList.toggle('show');
+    }
+    document.addEventListener('click', (e) => {
+        const menu = document.getElementById('moreMenu');
+        if (menu && !e.target.closest('.dropdown-wrap')) {
+            menu.classList.remove('show');
+        }
+    });
+
+    function syncGoogleSheet() {
+        if (!confirm('현재까지의 검수 및 채점 결과를 교사 구글 시트에 최종 반영하시겠습니까?')) {
+            return;
+        }
+        showToast('⏳ 구글 시트로 동기화 중...');
+        fetch('/api/google/sync_sheet.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ assignment_id: assignId })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert('✅ 구글 시트 동기화가 성공적으로 완료되었습니다.');
+            } else {
+                alert('동기화 실패: ' + (data.error || '오류 발생'));
+            }
+        })
+        .catch(err => {
+            alert('네트워크 통신 오류: ' + err.message);
+        });
+    }
+
+    function scrollTabs(direction) {
+        const tabsEl = document.getElementById('subTabsContainer');
+        if (tabsEl) {
+            tabsEl.scrollBy({ left: direction * 220, behavior: 'smooth' });
+        }
+    }
+
     function regradePending() {
-        const btn = document.getElementById('btnRegradePending');
+        const btn = document.getElementById('btnPendingBadge');
         if (btn) {
             btn.disabled = true;
             btn.innerHTML = "<span>⏳ AI 채점 중...</span>";
@@ -923,21 +1394,19 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
         .then(res => {
             if (btn) {
                 btn.disabled = false;
-                btn.innerHTML = "<span>⚡ 미판독 AI 채점</span>";
             }
             if (res.success) {
                 showToast('✅ ' + (res.message || '미판독 문항 채점이 완료되었습니다.'));
                 fetchLatestResults();
             } else {
                 alert('재채점 실패: ' + (res.error || '오류가 발생했습니다.'));
+                updatePendingBadge();
             }
         })
         .catch(err => {
-            if (btn) {
-                btn.disabled = false;
-                btn.innerHTML = "<span>⚡ 미판독 AI 채점</span>";
-            }
+            if (btn) btn.disabled = false;
             alert('통신 오류: ' + err.message);
+            updatePendingBadge();
         });
     }
 
@@ -945,11 +1414,7 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
         if (!confirm("템플릿 에디터에서 수정한 최신 정답/배점을 전체 학생 결과에 반영하시겠습니까?\n\n- 선생님이 수기 검수한 점수는 안전하게 유지됩니다.\n- 배점이 변경된 부분점수 문항은 '재검수 필요' 상태로 전환됩니다.")) {
             return;
         }
-        const btn = document.getElementById('btnSyncTemplate');
-        if (btn) {
-            btn.disabled = true;
-            btn.innerHTML = "<span>⏳ 동기화 중...</span>";
-        }
+        showToast('⏳ 템플릿 동기화 중...');
 
         fetch('/api/grading/regrade_by_template.php', {
             method: 'POST',
@@ -963,26 +1428,20 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
                 location.reload();
             } else {
                 alert('동기화 실패: ' + (res.error || '알 수 없는 오류'));
-                if (btn) {
-                    btn.disabled = false;
-                    btn.innerHTML = "<span>🔄 템플릿 재동기화</span>";
-                }
             }
         })
         .catch(err => {
             console.error('동기화 오류:', err);
             alert('네트워크 통신 오류가 발생했습니다.');
-            if (btn) {
-                btn.disabled = false;
-                btn.innerHTML = "<span>🔄 템플릿 재동기화</span>";
-            }
         });
     }
 
     setInterval(fetchLatestResults, 3000);
 
     function toggleFilter() {
-        showSubjectiveOnly = document.getElementById('chkSubjectiveOnly').checked;
+        showSubjectiveOnly = !showSubjectiveOnly;
+        const btnSubj = document.getElementById('btnSubjectiveOnly');
+        if (btnSubj) btnSubj.classList.toggle('active', showSubjectiveOnly);
         saveState();
         applyFiltersAndRefresh(true);
     }
@@ -995,6 +1454,7 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
             }
             return true;
         });
+        updatePendingBadge();
         refreshTabsAndView(resetFocus);
     }
 
@@ -1111,6 +1571,77 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
         bar.style.display = 'flex';
     }
 
+    function updateBottomBarNav(list, currentKey) {
+        const scrubber = document.getElementById('botScrubber');
+        const prevBtn = document.getElementById('btnPrevQ');
+        const nextBtn = document.getElementById('btnNextQ');
+        if (!scrubber) return;
+
+        scrubber.innerHTML = '';
+        const curIdx = list.indexOf(String(currentKey));
+
+        if (prevBtn) {
+            prevBtn.disabled = (curIdx <= 0);
+            prevBtn.style.opacity = (curIdx <= 0) ? '0.4' : '1';
+        }
+        if (nextBtn) {
+            nextBtn.disabled = (curIdx < 0 || curIdx >= list.length - 1);
+            nextBtn.style.opacity = (curIdx < 0 || curIdx >= list.length - 1) ? '0.4' : '1';
+        }
+
+        list.forEach(key => {
+            const chip = document.createElement('button');
+            chip.type = 'button';
+            chip.className = `bot-scrub-chip ${String(key) === String(currentKey) ? 'active' : ''}`;
+            chip.textContent = (viewMode === 'question') ? `${key}번` : key;
+            chip.onclick = () => {
+                selectedFilterKey = (viewMode === 'question') ? key : (parseInt(key, 10) || key);
+                saveState();
+                refreshTabsAndView(true);
+            };
+            scrubber.appendChild(chip);
+        });
+
+        const activeChip = scrubber.querySelector('.bot-scrub-chip.active');
+        if (activeChip) {
+            activeChip.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+        }
+    }
+
+    function navigateFilter(delta) {
+        if (viewMode === 'question') {
+            const parentMap = new Map();
+            filteredData.forEach(r => {
+                const pId = String(r.parentId || '1');
+                if (!parentMap.has(pId)) parentMap.set(pId, true);
+            });
+            const qList = Array.from(parentMap.keys()).sort((a,b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+            const curIdx = qList.indexOf(String(selectedFilterKey));
+            if (curIdx >= 0) {
+                const nextIdx = curIdx + delta;
+                if (nextIdx >= 0 && nextIdx < qList.length) {
+                    selectedFilterKey = qList[nextIdx];
+                    saveState();
+                    refreshTabsAndView(true);
+                }
+            }
+        } else {
+            const sList = [];
+            filteredData.forEach(r => {
+                if (!sList.includes(r.db_id)) sList.push(r.db_id);
+            });
+            const curIdx = sList.indexOf(selectedFilterKey);
+            if (curIdx >= 0) {
+                const nextIdx = curIdx + delta;
+                if (nextIdx >= 0 && nextIdx < sList.length) {
+                    selectedFilterKey = sList[nextIdx];
+                    saveState();
+                    refreshTabsAndView(true);
+                }
+            }
+        }
+    }
+
     function refreshTabsAndView(resetFocus = false) {
         const container = document.getElementById('subTabsContainer');
         container.innerHTML = '';
@@ -1155,17 +1686,31 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
 
             questions.forEach(q => {
                 const btn = document.createElement('button');
-                btn.className = `sub-tab-item ${q.parentId === selectedFilterKey ? 'active' : ''}`;
+                const isActive = (q.parentId === selectedFilterKey);
+                btn.className = `sub-tab-pill ${isActive ? 'active' : ''}`;
+                btn.id = `tab-item-${q.parentId}`;
                 
-                let badgeLabel = '객관식';
+                let typeName = '객관식';
+                let dotHtml = '';
+                
                 if (q.subItems.size > 1) {
-                    badgeLabel = `소문항 ${q.subItems.size}`;
-                } else if (q.type === 'subjective') badgeLabel = '주관식';
-                else if (q.type === 'short_answer') badgeLabel = '단답형';
-                else if (q.type === 'matching_line') badgeLabel = '선잇기';
-                else if (q.type === 'sub_item') badgeLabel = '소문항';
+                    typeName = `소문항 ${q.subItems.size}개`;
+                    dotHtml = `<span class="type-dot-multi" title="${typeName}"><span></span><span></span></span>`;
+                } else if (q.type === 'subjective') {
+                    typeName = '주관식';
+                    dotHtml = `<span class="type-dot subjective" title="${typeName}"></span>`;
+                } else if (q.type === 'short_answer') {
+                    typeName = '단답형';
+                    dotHtml = `<span class="type-dot short_answer" title="${typeName}"></span>`;
+                } else if (q.type === 'matching_line') {
+                    typeName = '선잇기';
+                    dotHtml = `<span class="type-dot matching_line" title="${typeName}"></span>`;
+                } else {
+                    dotHtml = `<span class="type-dot objective" title="${typeName}"></span>`;
+                }
 
-                btn.innerHTML = `${q.parentId}번 <span class="type-badge">${badgeLabel}</span>`;
+                btn.title = `${q.parentId}번 (${typeName})`;
+                btn.innerHTML = `<span class="pill-num">${q.parentId}번</span>${dotHtml}`;
                 btn.onclick = () => { 
                     selectedFilterKey = q.parentId; 
                     saveState(); 
@@ -1173,6 +1718,9 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
                 };
                 container.appendChild(btn);
             });
+
+            const qKeyList = questions.map(q => String(q.parentId));
+            updateBottomBarNav(qKeyList, selectedFilterKey);
 
             // 문제 박스 단위 그룹핑 (학생별로 1개 행)
             if (selectedFilterKey) {
@@ -1221,11 +1769,17 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
 
             students.forEach(s => {
                 const btn = document.createElement('button');
-                btn.className = `sub-tab-item ${s.db_id === selectedFilterKey ? 'active' : ''}`;
-                btn.innerText = s.studentName;
+                const isActive = (s.db_id === selectedFilterKey);
+                btn.className = `sub-tab-pill student-pill ${isActive ? 'active' : ''}`;
+                btn.id = `tab-item-${s.db_id}`;
+                btn.title = s.studentName;
+                btn.innerHTML = `<span class="pill-num">${s.studentName}</span>`;
                 btn.onclick = () => { selectedFilterKey = s.db_id; saveState(); refreshTabsAndView(true); };
                 container.appendChild(btn);
             });
+
+            const sKeyList = students.map(s => s.db_id);
+            updateBottomBarNav(sKeyList, selectedFilterKey);
 
             if (selectedFilterKey) {
                 const parentGroupMap = new Map();
@@ -1264,6 +1818,12 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
         updateBenchmarkBar();
         renderTable();
         
+        // 활성 탭 자동 중앙 스크롤
+        const activeTabEl = document.getElementById(`tab-item-${selectedFilterKey}`);
+        if (activeTabEl) {
+            activeTabEl.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+        }
+
         // 이동 시 항상 학생 단위(Level 1: 'box')로 최우선 포커스!
         if (resetFocus && displayRows.length > 0) setFocus(0, 'box');
         else if (displayRows.length === 0) setFocus(-1, 'box');
@@ -1275,20 +1835,20 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
 
         if (focusLevel === 'sub') {
             textEl.innerHTML = `
-                ⌨️ <b>[소문항 개별 채점]</b> 
-                <span style="color:#34d399">[1] O 정답</span> | 
-                <span style="color:#f87171">[2] X 오답</span> | 
-                <span style="color:#fbbf24">[3] △ 부분점수</span> | 
-                <span style="color:#60a5fa">[Tab] 다음 소문항</span> | 
-                <span>[Esc / Shift+Tab] 학생 전체로 복귀</span>
+                ⌨️ <b>소문항:</b> 
+                <span style="color:#34d399">[1] O</span> | 
+                <span style="color:#f87171">[2] X</span> | 
+                <span style="color:#fbbf24">[3] △</span> | 
+                <span style="color:#60a5fa">[Tab] 다음</span> | 
+                <span>[Esc] 복귀</span>
             `;
         } else {
             textEl.innerHTML = `
-                ⌨️ <b>[문항 전체 채점]</b> 
-                <span style="color:#34d399">[1] 전체 정답(만점)</span> | 
-                <span style="color:#f87171">[2] 전체 오답(0점)</span> | 
-                <span style="color:#60a5fa">[Tab] 소문항 개별 채점</span> | 
-                <span>[↑/↓] 학생 이동</span> | 
+                ⌨️ <b>단축키:</b> 
+                <span style="color:#34d399">[1] 만점</span> | 
+                <span style="color:#f87171">[2] 오답</span> | 
+                <span style="color:#60a5fa">[Tab] 소문항</span> | 
+                <span>[↑/↓] 학생</span> | 
                 <span>[Backspace] 취소</span>
             `;
         }
@@ -1339,14 +1899,14 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
             } else if (box.status === 'incorrect') {
                 boxStatusBadge = `<span class="badge-status badge-incorrect">❌ 오답 (0점)</span>`;
             } else if (box.status === 'partial') {
-                boxStatusBadge = `<span class="badge-status badge-partial">△ 부분점수 (${box.totalCurrentScore}점)</span>`;
+                boxStatusBadge = `<span class="badge-status badge-partial">△ 부분 (${box.totalCurrentScore}점)</span>`;
             } else {
-                boxStatusBadge = `<span class="badge-status badge-pending">⏳ 검수 대기</span>`;
+                boxStatusBadge = `<span class="badge-status badge-pending">⏳ 검수대기</span>`;
             }
 
             let appealHtml = '';
             if (box.hasAppeal) {
-                appealHtml = `<div style="margin-top:4px;"><span class="badge-appeal">🙋 "${box.appealReason}"</span></div>`;
+                appealHtml = `<div style="margin-top:3px;"><span class="badge-appeal">🙋 "${box.appealReason}"</span></div>`;
             }
 
             // 중앙 열: 박스 겹치기를 완전히 제거하고 크롭 이미지를 큼직하게 극대화한 플랫 뷰
@@ -1428,31 +1988,20 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
             if (!isCurrent || focusLevel === 'box') {
                 // [Level 1: 학생 전체 포커스] 1타 일괄 채점
                 let tabDrillBtnHtml = '';
-                if (hasMultipleSub) {
-                    if (box.hasPartialScore) {
-                        tabDrillBtnHtml = `
-                            <div>
-                                <button type="button" class="btn-tab-drill" onclick="enterSubFocus(${index}, 0, event)">
-                                    🔍 <b>[Tab]</b> 소문항 개별 채점 (부분점수용)
-                                </button>
-                            </div>
-                        `;
-                    } else {
-                        tabDrillBtnHtml = `
-                            <div style="font-size:0.75rem; color:#94a3b8; margin-top:5px;">
-                                ※ 부분점수 미인정 문항 (All or Nothing)
-                            </div>
-                        `;
-                    }
+                if (hasMultipleSub && box.hasPartialScore) {
+                    tabDrillBtnHtml = `
+                        <div style="margin-top:4px;">
+                            <button type="button" class="btn-tab-drill-compact" onclick="enterSubFocus(${index}, 0, event)">
+                                🔍 <b>[Tab]</b> 소문항 개별
+                            </button>
+                        </div>
+                    `;
                 }
 
                 actionControlHtml = `
-                    <div style="font-size:0.82rem; font-weight:800; color:#0f172a; margin-bottom:6px;">
-                        🎯 <b>문항 전체 채점</b> <span style="font-size:0.75rem; color:#64748b; font-weight:normal;">(1타 전체 반영)</span>
-                    </div>
-                    <div>
-                        <button class="score-btn btn-o" onclick="markAllSubScores(${index}, 'correct', event)"><b>[1]</b> 전체 만점 (${box.totalMaxScore}점)</button>
-                        <button class="score-btn btn-x" onclick="markAllSubScores(${index}, 'incorrect', event)"><b>[2]</b> 전체 오답 (0점)</button>
+                    <div class="score-btn-group">
+                        <button class="score-btn btn-o" onclick="markAllSubScores(${index}, 'correct', event)"><b>[1]</b> 만점 (${box.totalMaxScore}점)</button>
+                        <button class="score-btn btn-x" onclick="markAllSubScores(${index}, 'incorrect', event)"><b>[2]</b> 오답 (0점)</button>
                     </div>
                     ${tabDrillBtnHtml}
                 `;
@@ -1465,24 +2014,24 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
                     for (let ps = activeSub.score - step; ps > 0; ps -= step) {
                         presetList.push(Math.round(ps * 10) / 10);
                     }
-                    presetBtnsHtml = `<div style="margin-top:6px; display:flex; gap:3px; justify-content:center; flex-wrap:wrap;">` + presetList.map(ps => 
+                    presetBtnsHtml = `<div style="margin-top:4px; display:flex; gap:3px; justify-content:center; flex-wrap:wrap;">` + presetList.map(ps => 
                         `<button type="button" class="preset-score-btn" onclick="savePartialScore(${index}, ${activeSub.score}, ${ps}, event)" title="${ps}점 즉시 부여">${ps}점</button>`
                     ).join('') + `</div>`;
                 }
 
                 actionControlHtml = `
-                    <div style="font-size:0.88rem; font-weight:800; color:#2563eb; margin-bottom:6px;">
+                    <div style="font-size:0.8rem; font-weight:800; color:#2563eb; margin-bottom:3px;">
                         🎯 <b>[${activeSub.item_id}번]</b> 채점 중 
-                        <span style="font-size:0.72rem; color:#64748b; font-weight:normal;">(Tab: 다음 / Esc: 복귀)</span>
+                        <span style="font-size:0.72rem; color:#64748b; font-weight:normal;">(Tab: 다음)</span>
                     </div>
-                    <div>
-                        <button class="score-btn btn-o" onclick="markSubScore(${index}, ${curSubIdx}, ${activeSub.score}, 'correct', event)"><b>[1]</b> O 정답 (${activeSub.score})</button>
-                        <button class="score-btn btn-x" onclick="markSubScore(${index}, ${curSubIdx}, 0, 'incorrect', event)"><b>[2]</b> X 오답 (0)</button>
-                        <button class="score-btn btn-p" onclick="enterPartialMode(${index}, ${curSubIdx}, event)"><b>[3]</b> △ 부분점수</button>
+                    <div class="score-btn-group">
+                        <button class="score-btn btn-o" onclick="markSubScore(${index}, ${curSubIdx}, ${activeSub.score}, 'correct', event)"><b>[1]</b> O (${activeSub.score})</button>
+                        <button class="score-btn btn-x" onclick="markSubScore(${index}, ${curSubIdx}, 0, 'incorrect', event)"><b>[2]</b> X (0)</button>
+                        <button class="score-btn btn-p" onclick="enterPartialMode(${index}, ${curSubIdx}, event)"><b>[3]</b> △</button>
                     </div>
-                    <div style="margin-top:4px;">
-                        <button type="button" class="score-btn" style="background:#f1f5f9; color:#475569; font-size:0.78rem; padding:4px 8px;" onclick="exitSubFocus(${index}, event)">
-                            ↩ [Esc] 학생 전체 포커스로 복귀
+                    <div style="margin-top:3px;">
+                        <button type="button" class="btn-sub-exit" onclick="exitSubFocus(${index}, event)">
+                            ↩ [Esc] 복귀
                         </button>
                     </div>
 
@@ -1491,7 +2040,7 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
                             <input type="number" class="partial-input" id="partialInput-${index}" 
                                    min="0" max="${activeSub.score}" step="0.5" 
                                    value="${activeSub.currentScore !== null ? activeSub.currentScore : Math.floor(activeSub.score/2)}">
-                            <span style="font-weight:bold; font-size:0.9rem;"> / ${activeSub.score}점</span>
+                            <span style="font-weight:bold; font-size:0.85rem;"> / ${activeSub.score}점</span>
                         </div>
                         ${presetBtnsHtml}
                     </div>
@@ -1506,11 +2055,11 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
 
             tr.innerHTML = `
                 <td>
-                    <div style="font-size:1.08em; font-weight:800; color:#0f172a;">${leftHeaderTitle}</div>
-                    <div class="box-score-summary">
-                        합계: <b>${box.totalCurrentScore}</b> / ${box.totalMaxScore}점
+                    <div style="font-size:0.96rem; font-weight:800; color:#0f172a;">${leftHeaderTitle}</div>
+                    <div class="box-score-summary" style="font-size:0.82rem; color:#475569; margin:2px 0;">
+                        <b>${box.totalCurrentScore}</b> / ${box.totalMaxScore}점
                     </div>
-                    <div style="margin-top: 4px;">${boxStatusBadge}</div>
+                    <div>${boxStatusBadge}</div>
                     ${appealHtml}
                 </td>
                 <td>
@@ -1810,7 +2359,21 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
             return;
         }
 
-        // 5. 메인 단축키 [1], [2], [3], [ArrowUp], [ArrowDown], [Backspace]
+        // 5. 문항 간 이동 단축키 [ / ] 또는 PageUp / PageDown
+        if (!isPartialMode) {
+            if (e.key === '[' || e.key === 'PageUp') {
+                e.preventDefault();
+                navigateFilter(-1);
+                return;
+            }
+            if (e.key === ']' || e.key === 'PageDown') {
+                e.preventDefault();
+                navigateFilter(1);
+                return;
+            }
+        }
+
+        // 6. 메인 단축키 [1], [2], [3], [ArrowUp], [ArrowDown], [Backspace]
         switch (e.key) {
             case '1':
                 e.preventDefault();
@@ -1936,6 +2499,17 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
             alert('네트워크 통신 오류가 발생했습니다.');
             document.getElementById('chkShowAnswer').checked = !isChecked;
         });
+    }
+
+    // 마우스 휠 가로 스크롤 지원
+    const tabsContainerEl = document.getElementById('subTabsContainer');
+    if (tabsContainerEl) {
+        tabsContainerEl.addEventListener('wheel', (e) => {
+            if (e.deltaY !== 0) {
+                e.preventDefault();
+                tabsContainerEl.scrollLeft += e.deltaY;
+            }
+        }, { passive: false });
     }
 </script>
 </body>
