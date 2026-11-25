@@ -18,6 +18,7 @@ app/.env
 # 로컬 전용 폴더
 dev/
 .v1104/
+_BACKUP_*/
 .agents/
 %SystemDrive%/
 p/

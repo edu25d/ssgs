@@ -633,24 +633,30 @@ if (!function_exists('bindAnswerKeyToRois')) {
                 // [수정 B] matching_line뿐 아니라 정답표가 단일 문항(is_sub_item=false)인데
                 // 시험지 ROI가 여러 개로 쪼개진 모든 유형에 대해 첫 대표 ROI만 남김
                 $first = $qGroup[0];
-                $minX = 999999; $minY = 999999; $maxX = 0; $maxY = 0;
-                foreach ($qGroup as $item) {
-                    if (!empty($item['ans_roi'])) {
-                        $minX = min($minX, $item['ans_roi']['x']);
-                        $minY = min($minY, $item['ans_roi']['y']);
-                        $maxX = max($maxX, $item['ans_roi']['x'] + $item['ans_roi']['w']);
-                        $maxY = max($maxY, $item['ans_roi']['y'] + $item['ans_roi']['h']);
+                if (($ansInfo['type'] ?? '') === 'matching_line') {
+                    // 선잇기 문항만 다이어그램 통합 BBox 생성
+                    $minX = 999999; $minY = 999999; $maxX = 0; $maxY = 0;
+                    foreach ($qGroup as $item) {
+                        if (!empty($item['ans_roi'])) {
+                            $minX = min($minX, $item['ans_roi']['x']);
+                            $minY = min($minY, $item['ans_roi']['y']);
+                            $maxX = max($maxX, $item['ans_roi']['x'] + $item['ans_roi']['w']);
+                            $maxY = max($maxY, $item['ans_roi']['y'] + $item['ans_roi']['h']);
+                        }
                     }
+                    $mergedAnsRoi = ($maxX > $minX && $maxY > $minY) 
+                        ? ['x' => $minX, 'y' => $minY, 'w' => $maxX - $minX, 'h' => $maxY - $minY]
+                        : ($first['ans_roi'] ?? ['x' => 100, 'y' => 100, 'w' => 300, 'h' => 200]);
+                    $first['ans_roi'] = $mergedAnsRoi;
+                } else {
+                    // 객관식/단답형 등 단일 문항은 첫 번째 대표 정답 괄호(답란) 유지 (다중 괄호 BBox 무차별 결합 방지)
+                    $first['ans_roi'] = $first['ans_roi'] ?? ['x' => 100, 'y' => 100, 'w' => 300, 'h' => 200];
                 }
-                $mergedAnsRoi = ($maxX > $minX && $maxY > $minY) 
-                    ? ['x' => $minX, 'y' => $minY, 'w' => $maxX - $minX, 'h' => $maxY - $minY]
-                    : ($first['ans_roi'] ?? ['x' => 100, 'y' => 100, 'w' => 300, 'h' => 200]);
 
                 $first['sub_id'] = null;
                 $first['display_num'] = (string)$qNum;
                 $first['type'] = $ansInfo['type'] ?? $first['type'];
                 $first['sub_type'] = $ansInfo['type'] ?? $first['sub_type'];
-                $first['ans_roi'] = $mergedAnsRoi;
                 unset($first['ans_rois']);
                 $collapsedRois[] = $first;
             } else {
@@ -685,7 +691,7 @@ if (!function_exists('bindAnswerKeyToRois')) {
                 $r['sub_type'] = $ansInfo['sub_type'];
             } else {
                 // 2. 단일 문항 바인딩 (객관식, 서술형, 단답/OX, 선잇기)
-                $r['answer'] = $ansInfo['normalized_answer'];
+                $r['answer'] = $ansInfo['normalized_answer'] ?? ($ansInfo['answer'] ?? '');
                 $r['score'] = (int)round($ansInfo['score']);
                 $r['criteria'] = $ansInfo['criteria'] ?? '';
                 $r['has_partial_score'] = $ansInfo['has_partial_score'] ?? false;

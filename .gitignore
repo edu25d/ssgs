@@ -8,6 +8,7 @@ public/uploads/
 
 # 로컬 전용 백업 및 작업 폴더 (프로젝트 코드와 무관)
 .v1104/
+_BACKUP_*/
 
 # 템플릿 이미지 — 커밋 대상 아님 (로컬 전용)
 app/template/images/
@@ -32,8 +33,8 @@ template_debug_result_*.json
 tmp_analysis/
 
 # 루트 복제본 및 구성 파일 (커밋 금지)
-api/
-lib/
+/api/
+/lib/
 vercel.json
 tsconfig.json
 package.json
