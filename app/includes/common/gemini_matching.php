@@ -726,7 +726,7 @@ if (!function_exists('gradeMatchingLinesLocal')) {
                     $py = $sy + $dy * $step;
 
                     $bandDarkHit = false;
-                    for ($band = -5; $band <= 5; $band += 2) {
+                    for ($band = -8; $band <= 8; $band += 1) {
                         $qx = (int)round($px + $nx * $band);
                         $qy = (int)round($py + $ny * $band);
 
@@ -735,7 +735,7 @@ if (!function_exists('gradeMatchingLinesLocal')) {
                             $r = ($rgb >> 16) & 0xFF;
                             $g = ($rgb >> 8) & 0xFF;
                             $b = $rgb & 0xFF;
-                            if ($r < 145 && $g < 145 && $b < 145) {
+                            if ($r < 155 && $g < 155 && $b < 155) {
                                 $bandDarkHit = true;
                                 break;
                             }
@@ -754,7 +754,7 @@ if (!function_exists('gradeMatchingLinesLocal')) {
                 }
             }
 
-            if ($bestTargetScore >= 0.22 && !empty($bestTargetLabel)) {
+            if ($bestTargetScore >= 0.18 && !empty($bestTargetLabel)) {
                 $detectedPairs[] = [
                     'from'       => $sLabel,
                     'to'         => $bestTargetLabel,
