@@ -186,19 +186,31 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
         }
         .filter-label:hover { background: #f8fafc; }
         
+        /* 💡 상단 고정 헤더 패널 (스크롤 시에도 문항 탭과 모범답안 벤치마크 바가 항상 화면 상단에 고정) */
+        .sticky-header-panel {
+            position: sticky;
+            top: 0;
+            z-index: 500;
+            background: #f8fafc;
+            padding-top: 8px;
+            padding-bottom: 6px;
+            border-bottom: 1.5px solid #e2e8f0;
+            margin-bottom: 12px;
+        }
+
         /* 탭 네비게이션: 흉물스러운 가로 스크롤바 숨김 */
         .sub-tabs { 
             display: flex; 
             gap: 8px; 
             overflow-x: auto; 
             padding-bottom: 6px; 
-            margin-bottom: 12px; 
+            margin-bottom: 8px; 
             scrollbar-width: none; 
             -ms-overflow-style: none; 
         }
         .sub-tabs::-webkit-scrollbar { display: none; }
         .sub-tab-item { 
-            padding: 8px 16px; 
+            padding: 7px 15px; 
             background: white; 
             border: 1.5px solid #cbd5e1; 
             border-radius: 20px; 
@@ -229,29 +241,29 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
             color: #f8fafc; 
         }
 
-        /* 💡 최상단 기준 모범답안 & 배점 벤치마크 고정 바 (Sticky Header Benchmark) */
+        /* 💡 최상단 기준 모범답안 & 배점 벤치마크 바 */
         .benchmark-bar {
             background: #ffffff;
             border: 1.5px solid #cbd5e1;
             border-left: 5px solid #2563eb;
-            border-radius: 10px;
-            padding: 12px 18px;
-            margin-bottom: 16px;
+            border-radius: 8px;
+            padding: 10px 16px;
+            margin-bottom: 2px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 16px;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+            gap: 14px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
             flex-wrap: wrap;
         }
         .benchmark-info-left {
             display: flex;
             align-items: center;
-            gap: 14px;
+            gap: 12px;
             flex-wrap: wrap;
         }
         .benchmark-title {
-            font-size: 1.02rem;
+            font-size: 1.0rem;
             font-weight: 800;
             color: #0f172a;
             display: flex;
@@ -261,7 +273,7 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
         .benchmark-answers-group {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
             flex-wrap: wrap;
         }
         .benchmark-answer-tag {
@@ -277,24 +289,24 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
             background: #ecfdf5;
             border: 1px solid #a7f3d0;
             color: #047857;
-            padding: 4px 10px;
+            padding: 3px 9px;
             border-radius: 6px;
-            font-size: 0.82rem;
+            font-size: 0.8rem;
             font-weight: 800;
         }
         .benchmark-badge-nopartial {
             background: #fef2f2;
             border: 1px solid #fecaca;
             color: #b91c1c;
-            padding: 4px 10px;
+            padding: 3px 9px;
             border-radius: 6px;
-            font-size: 0.82rem;
+            font-size: 0.8rem;
             font-weight: 800;
         }
         
         table { width: 100%; border-collapse: separate; border-spacing: 0 10px; }
         th, td { 
-            padding: 14px 16px; 
+            padding: 12px 14px; 
             background: white; 
             vertical-align: middle; 
             border-top: 1.5px solid #e2e8f0; 
@@ -304,15 +316,15 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
         td:first-child { 
             border-left: 1.5px solid #e2e8f0; 
             border-radius: 10px 0 0 10px; 
-            width: 15%; 
+            width: 14%; 
             text-align: center; 
             line-height: 1.4; 
         }
-        td:nth-child(2) { text-align: left; padding: 12px 18px; width: 60%; } 
+        td:nth-child(2) { text-align: left; padding: 10px 14px; width: 62%; } 
         td:last-child { 
             border-right: 1.5px solid #e2e8f0; 
             border-radius: 0 10px 10px 0; 
-            width: 25%; 
+            width: 24%; 
             text-align: center; 
         }
         
@@ -374,22 +386,112 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
             border: 1px solid #ddd6fe;
         }
         
-        /* 크롭 컨테이너 & 호버 시에만 등장하는 리사이즈 핸들러 */
-        .crop-container { 
-            position: relative; 
-            display: inline-block; 
-            padding: 4px; 
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 6px;
+        /* 🚫 박스 안의 박스 겹치기 완전 제거: 단일 플랫 소문항 패널 구조 */
+        .sub-items-row {
+            display: flex;
+            gap: 14px;
+            align-items: stretch;
+            width: 100%;
         }
-        .crop-img { 
+        .sub-crop-pane {
+            flex: 1 1 0;
+            min-width: 220px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #ffffff;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            min-height: 180px;
+        }
+        .sub-crop-pane:hover {
+            border-color: #94a3b8;
+            background: #fafafa;
+        }
+        /* Level 2 소문항 활성 포커스 스타일 (선명한 블루 링) */
+        .sub-crop-pane.active {
+            border-color: #2563eb !important;
+            background: #eff6ff !important;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25) !important;
+        }
+
+        /* 📸 크롭 이미지: 콩알만했던 높이를 175px로 시원하게 2배 확대! */
+        .crop-img-large { 
             max-width: 100%; 
-            max-height: 130px; 
+            height: 175px; 
             border-radius: 4px; 
             display: block; 
             object-fit: contain;
+            background: transparent;
         }
+
+        /* 소문항 번호 미니멀 라벨 (카드 헤더 박스 완전 제거) */
+        .sub-pane-tag {
+            position: absolute;
+            top: 6px;
+            left: 8px;
+            font-size: 0.82rem;
+            font-weight: 800;
+            color: #334155;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: rgba(241, 245, 249, 0.88);
+            padding: 2px 7px;
+            border-radius: 4px;
+            backdrop-filter: blur(3px);
+            z-index: 4;
+            border: 1px solid rgba(203, 213, 225, 0.6);
+        }
+        .sub-crop-pane.active .sub-pane-tag {
+            color: #1d4ed8;
+            background: #dbeafe;
+            border-color: #bfdbfe;
+        }
+
+        /* 소문항 상태 뱃지 (우측 상단 오버레이) */
+        .sub-status-overlay {
+            position: absolute;
+            top: 6px;
+            right: 8px;
+            z-index: 4;
+        }
+
+        /* 🤖 AI 인식값 플로팅 오버레이 (세로 높이 갉아먹기 0px!) */
+        .ai-recognition-overlay {
+            position: absolute;
+            bottom: 6px;
+            right: 8px;
+            font-size: 0.82rem;
+            font-weight: 700;
+            padding: 3px 9px;
+            border-radius: 5px;
+            background: rgba(15, 23, 42, 0.82);
+            color: #ffffff;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+            backdrop-filter: blur(4px);
+            z-index: 4;
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .ai-recognition-overlay b {
+            color: #60a5fa;
+            font-size: 0.95em;
+        }
+        .ai-recognition-overlay.is-correct {
+            background: rgba(4, 120, 87, 0.9);
+        }
+        .ai-recognition-overlay.is-incorrect {
+            background: rgba(185, 28, 28, 0.9);
+        }
+
+        /* 크롭 확장 버튼 (호버 시에만 등장) */
         .expand-btn { 
             position: absolute; 
             background: rgba(37, 99, 235, 0.6); 
@@ -399,7 +501,7 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
             pointer-events: none; 
             z-index: 5;
         }
-        .crop-container:hover .expand-btn { 
+        .sub-crop-pane:hover .expand-btn { 
             opacity: 0.65; 
             pointer-events: auto; 
         }
@@ -407,96 +509,10 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
             opacity: 1 !important; 
             background: rgba(37, 99, 235, 0.95); 
         }
-        .expand-top { top: -4px; left: 0; right: 0; height: 8px; border-radius: 4px 4px 0 0; }
-        .expand-bottom { bottom: -4px; left: 0; right: 0; height: 8px; border-radius: 0 0 4px 4px; }
-        .expand-left { top: 0; bottom: 0; left: -4px; width: 8px; border-radius: 4px 0 0 4px; }
-        .expand-right { top: 0; bottom: 0; right: -4px; width: 8px; border-radius: 0 4px 4px 0; }
-
-        /* 소문항 통합 그리드 및 서브 카드 디자인 */
-        .sub-items-grid {
-            display: flex;
-            gap: 12px;
-            align-items: stretch;
-            flex-wrap: wrap;
-            width: 100%;
-        }
-        .sub-item-card {
-            flex: 1 1 240px;
-            min-width: 210px;
-            background: #ffffff;
-            border: 1.5px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 10px 12px;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            position: relative;
-            cursor: pointer;
-            transition: all 0.15s ease;
-        }
-        .sub-item-card:hover {
-            border-color: #cbd5e1;
-            background: #fafafa;
-        }
-        /* Level 2 소문항 활성 포커스 스타일 */
-        .sub-item-card.active {
-            border: 2.5px solid #2563eb !important;
-            background: #eff6ff !important;
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2) !important;
-        }
-        .sub-item-card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 6px;
-            padding-bottom: 5px;
-            border-bottom: 1px solid #f1f5f9;
-        }
-        .sub-item-title-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 0.92rem;
-            font-weight: 800;
-            color: #1e293b;
-        }
-        .sub-item-card.active .sub-item-title-pill {
-            color: #1d4ed8;
-        }
-        .sub-item-focus-badge {
-            display: none;
-            font-size: 0.72rem;
-            padding: 2px 6px;
-            border-radius: 4px;
-            background: #2563eb;
-            color: white;
-            font-weight: 800;
-        }
-        .sub-item-card.active .sub-item-focus-badge {
-            display: inline-block;
-        }
-        .box-score-summary {
-            font-size: 0.88rem;
-            margin-top: 4px;
-            padding: 3px 8px;
-            background: #f1f5f9;
-            border-radius: 6px;
-            color: #334155;
-            line-height: 1.4;
-        }
-        
-        .extracted-answer { 
-            font-size: 0.85em; 
-            color: #334155; 
-            background: #f8fafc; 
-            padding: 4px 8px; 
-            border-radius: 4px; 
-            border: 1px solid #e2e8f0; 
-            margin-top: 6px;
-            text-align: center;
-        }
-        .extracted-answer b { color: #2563eb; }
-        .badge-warning { background: #ef4444; color: white; padding: 1px 4px; border-radius: 3px; font-size: 0.75em; font-weight: bold; margin-right: 4px; }
+        .expand-top { top: 0; left: 0; right: 0; height: 8px; }
+        .expand-bottom { bottom: 0; left: 0; right: 0; height: 8px; }
+        .expand-left { top: 0; bottom: 0; left: 0; width: 8px; }
+        .expand-right { top: 0; bottom: 0; right: 0; width: 8px; }
         
         /* 버튼 스타일 */
         .score-btn { 
@@ -607,11 +623,11 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
         </button>
     </div>
 
-    <!-- 문항 탭 네비게이터 (가로 스크롤) -->
-    <div class="sub-tabs" id="subTabsContainer"></div>
-
-    <!-- 💡 최상단 기준 모범답안 & 배점 벤치마크 고정 바 -->
-    <div id="benchmarkBar" class="benchmark-bar" style="display:none;"></div>
+    <!-- 💡 상단 고정 헤더 패널 (스크롤 시에도 문항 탭과 모범답안 벤치마크 바가 항상 화면 상단에 고정) -->
+    <div class="sticky-header-panel">
+        <div class="sub-tabs" id="subTabsContainer"></div>
+        <div id="benchmarkBar" class="benchmark-bar" style="display:none;"></div>
+    </div>
 
     <table id="reviewTable">
         <tbody id="studentList"></tbody>
@@ -1333,65 +1349,74 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
                 appealHtml = `<div style="margin-top:4px;"><span class="badge-appeal">🙋 "${box.appealReason}"</span></div>`;
             }
 
-            // 중앙 열: 각 소문항의 크롭 영역 및 학생 답안 (모범답안 중복 텍스트 완전 제거!)
-            let subItemsCardsHtml = `<div class="sub-items-grid">`;
+            // 중앙 열: 박스 겹치기를 완전히 제거하고 크롭 이미지를 큼직하게 극대화한 플랫 뷰
+            let subItemsCardsHtml = `<div class="sub-items-row">`;
             box.subItems.forEach((sub, subIdx) => {
                 const isSubActive = (isCurrent && focusLevel === 'sub' && box.activeSubIndex === subIdx);
                 
-                let subBadge = '';
-                if (sub.status === 'correct') {
-                    subBadge = `<span class="badge-status badge-correct">✅ 정답 (${sub.currentScore}점)</span>`;
-                } else if (sub.status === 'incorrect') {
-                    subBadge = `<span class="badge-status badge-incorrect">❌ 오답 (0점)</span>`;
-                } else if (sub.status === 'partial') {
-                    subBadge = `<span class="badge-status badge-partial">△ 부분 (${sub.currentScore}점)</span>`;
-                } else {
-                    subBadge = sub.isAiPending 
-                        ? `<span class="badge-status badge-pending" style="color:#2563eb;">⚡ AI 판독 중</span>`
-                        : `<span class="badge-status badge-pending">⏳ 대기</span>`;
+                // 소문항 번호 (소문항 2개 이상일 때만 좌상단에 미니멀 칩으로 표시)
+                let tagLabelHtml = '';
+                if (hasMultipleSub) {
+                    const pageBadge = sub.page && sub.page > 1 ? ` ${sub.page}쪽` : '';
+                    tagLabelHtml = `
+                        <div class="sub-pane-tag">
+                            <span>${sub.item_id}번${pageBadge}</span>
+                            ${isSubActive ? '<span style="color:#2563eb; font-weight:900;">●</span>' : ''}
+                        </div>
+                    `;
                 }
 
-                let subAppealBadge = sub.appeal ? `<span class="badge-appeal" style="font-size:0.75rem;">🙋 ${sub.appeal_reason}</span>` : '';
-
-                let extractedAnswerHtml = '';
-                if (sub.type === 'matching_line') {
-                    const pairsText = sub.rawText || '선잇기 미인식';
-                    extractedAnswerHtml = `<div class="extracted-answer">📏 선잇기: <b>${pairsText}</b></div>`;
-                } else if (sub.type !== 'subjective' && sub.type !== 'essay') {
+                // 소문항 개별 상태 뱃지 (우측 상단 오버레이)
+                let statusBadgeHtml = '';
+                if (sub.status === 'correct') {
+                    statusBadgeHtml = `<span class="badge-status badge-correct sub-status-overlay">정답 (${sub.currentScore}점)</span>`;
+                } else if (sub.status === 'incorrect') {
+                    statusBadgeHtml = `<span class="badge-status badge-incorrect sub-status-overlay">오답 (0점)</span>`;
+                } else if (sub.status === 'partial') {
+                    statusBadgeHtml = `<span class="badge-status badge-partial sub-status-overlay">부분 (${sub.currentScore}점)</span>`;
+                } else {
                     if (sub.isAiPending) {
-                        extractedAnswerHtml = `<div class="extracted-answer" style="color:#2563eb;">🤖 AI 판독 중...</div>`;
-                    } else {
-                        const warningBadge = sub.isUnread ? '<span class="badge-warning">⚠️</span> ' : '';
-                        extractedAnswerHtml = `<div class="extracted-answer">${warningBadge}인식: <b>${sub.rawText === '' ? '미기재' : sub.rawText}</b></div>`;
+                        statusBadgeHtml = `<span class="badge-status badge-pending sub-status-overlay" style="color:#2563eb;">AI 판독 중</span>`;
                     }
                 }
 
-                const pageBadge = sub.page && sub.page > 1 ? `<span style="font-size:0.75em; background:#e2e8f0; color:#475569; padding:1px 5px; border-radius:4px; margin-left:4px;">${sub.page}쪽</span>` : '';
+                // AI 인식값 (세로 공간 0px 소모! 우측 하단 플로팅 오버레이 칩)
+                let aiOverlayHtml = '';
+                if (sub.type === 'matching_line') {
+                    const pairsText = sub.rawText || '미인식';
+                    aiOverlayHtml = `<div class="ai-recognition-overlay"><span>선잇기: <b>${pairsText}</b></span></div>`;
+                } else if (sub.type !== 'subjective' && sub.type !== 'essay') {
+                    if (sub.isAiPending) {
+                        aiOverlayHtml = `<div class="ai-recognition-overlay"><span>🤖 AI 채점 중...</span></div>`;
+                    } else if (sub.rawText) {
+                        const isMatch = (sub.status === 'correct');
+                        const isMismatch = (sub.status === 'incorrect');
+                        const overlayClass = isMatch ? 'is-correct' : (isMismatch ? 'is-incorrect' : '');
+                        const resText = isMatch ? '일치' : (isMismatch ? '불일치' : '');
+                        aiOverlayHtml = `
+                            <div class="ai-recognition-overlay ${overlayClass}">
+                                <span>인식: <b>${sub.rawText}</b></span>
+                                ${resText ? `<span style="font-size:0.75em; opacity:0.9;">(${resText})</span>` : ''}
+                            </div>
+                        `;
+                    } else if (sub.isUnread) {
+                        aiOverlayHtml = `<div class="ai-recognition-overlay is-incorrect"><span>⚠️ 미기재/판독불가</span></div>`;
+                    }
+                }
 
                 subItemsCardsHtml += `
-                    <div class="sub-item-card ${isSubActive ? 'active' : ''}" onclick="handleSubCardClick(${index}, ${subIdx}, event)">
-                        <div class="sub-item-card-header">
-                            <div class="sub-item-title-pill">
-                                <span>${sub.item_id}번</span>
-                                ${pageBadge}
-                                <span style="font-size:0.8rem; color:#64748b; font-weight:normal;">(${sub.score}점)</span>
-                                <span class="sub-item-focus-badge">🎯 선택됨</span>
-                            </div>
-                            <div style="display:flex; align-items:center; gap:4px;">
-                                ${subBadge}
-                                ${subAppealBadge}
-                            </div>
-                        </div>
+                    <div class="sub-crop-pane ${isSubActive ? 'active' : ''}" onclick="handleSubCardClick(${index}, ${subIdx}, event)">
+                        ${tagLabelHtml}
+                        ${statusBadgeHtml}
+                        
+                        <div class="expand-btn expand-top" onclick="expandSubImage(${index}, ${subIdx}, 'top', event)" title="Shift+↑ 확장"></div>
+                        <div class="expand-btn expand-bottom" onclick="expandSubImage(${index}, ${subIdx}, 'bottom', event)" title="Shift+↓ 확장"></div>
+                        <div class="expand-btn expand-left" onclick="expandSubImage(${index}, ${subIdx}, 'left', event)" title="Shift+← 확장"></div>
+                        <div class="expand-btn expand-right" onclick="expandSubImage(${index}, ${subIdx}, 'right', event)" title="Shift+→ 확장"></div>
 
-                        <div class="crop-container" style="align-self:center;">
-                            <div class="expand-btn expand-top" onclick="expandSubImage(${index}, ${subIdx}, 'top', event)" title="Shift+↑ 확장"></div>
-                            <div class="expand-btn expand-bottom" onclick="expandSubImage(${index}, ${subIdx}, 'bottom', event)" title="Shift+↓ 확장"></div>
-                            <div class="expand-btn expand-left" onclick="expandSubImage(${index}, ${subIdx}, 'left', event)" title="Shift+← 확장"></div>
-                            <div class="expand-btn expand-right" onclick="expandSubImage(${index}, ${subIdx}, 'right', event)" title="Shift+→ 확장"></div>
-                            <img src="${sub.crop_image_url}" class="crop-img" id="cropImg-${index}-${subIdx}" alt="${sub.item_id} 답안 크롭">
-                        </div>
+                        <img src="${sub.crop_image_url}" class="crop-img-large" id="cropImg-${index}-${subIdx}" alt="${sub.item_id} 답안 크롭">
 
-                        ${extractedAnswerHtml}
+                        ${aiOverlayHtml}
                     </div>
                 `;
             });
