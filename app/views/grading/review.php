@@ -110,7 +110,7 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
             color: #0f172a;
             padding: 12px 20px; 
             margin: 0; 
-            padding-bottom: 70px; 
+            padding-bottom: 130px; 
         }
 
         /* 1줄 통합 슬림 헤더 */
@@ -587,6 +587,10 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
         }
         
         table { width: 100%; border-collapse: separate; border-spacing: 0 6px; }
+        tr {
+            scroll-margin-top: 130px;
+            scroll-margin-bottom: 90px;
+        }
         th, td { 
             padding: 6px 12px; 
             vertical-align: middle; 
@@ -2096,6 +2100,37 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
         });
     }
 
+    // 포커스 카드 스마트 자동 스크롤 함수 (상단 고정 헤더 및 하단 고정 바 가림 방지)
+    function scrollToFocusedRow(targetRow) {
+        if (!targetRow) return;
+        requestAnimationFrame(() => {
+            const rect = targetRow.getBoundingClientRect();
+            const bottomBar = document.getElementById('bottomShortcutBar');
+            const bottomBarHeight = (bottomBar && bottomBar.offsetHeight) ? bottomBar.offsetHeight : 46;
+            const safeBottomMargin = 70; // 하단 바 위 70px 여유 공간 확보 (카드 하단 잘림 방지)
+            const bottomCutoff = window.innerHeight - bottomBarHeight - safeBottomMargin;
+
+            const stickyHeader = document.querySelector('.sticky-header-panel');
+            const topOffset = stickyHeader ? (stickyHeader.getBoundingClientRect().bottom + 14) : 130;
+
+            if (rect.bottom > bottomCutoff) {
+                // 카드가 화면 하단 바에 가려지거나 너무 아래에 위치한 경우: 화면을 아래로 스크롤하여 카드를 위로 올림
+                const scrollNeeded = rect.bottom - bottomCutoff;
+                if (rect.height > (bottomCutoff - topOffset)) {
+                    // 카드의 전체 높이가 가용 화면 높이보다 큰 경우 상단을 고정 헤더 바로 아래에 정렬
+                    const topScroll = rect.top - topOffset;
+                    window.scrollBy({ top: topScroll, behavior: 'smooth' });
+                } else {
+                    window.scrollBy({ top: scrollNeeded, behavior: 'smooth' });
+                }
+            } else if (rect.top < topOffset) {
+                // 카드가 상단 고정 헤더에 가려지는 경우: 화면을 위로 스크롤하여 카드를 아래로 내림
+                const scrollNeeded = rect.top - topOffset;
+                window.scrollBy({ top: scrollNeeded, behavior: 'smooth' });
+            }
+        });
+    }
+
     // 포커스 제어 함수 (이동 시 항상 학생 전체 L1 'box'로 시작)
     function setFocus(boxIndex, level = 'box', subIdx = 0) {
         if (boxIndex < 0 || boxIndex >= displayRows.length) {
@@ -2115,7 +2150,7 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
         updateShortcutGuide();
         
         const targetRow = document.getElementById(`row-${boxIndex}`);
-        if (targetRow) targetRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        if (targetRow) scrollToFocusedRow(targetRow);
     }
 
     // 소문항 모드로 진입 (Tab 키 또는 버튼 클릭)
@@ -2269,8 +2304,7 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
         // 1) 아직 소문항이 남아있으면 다음 소문항으로 포커스
         // 2) 마지막 소문항 채점이 완료되면 해당 학생 완료 -> 다음 학생의 L1(학생 전체)으로 자동 이동!
         if (subIdx + 1 < box.subItems.length) {
-            box.activeSubIndex = subIdx + 1;
-            renderTable();
+            setFocus(boxIndex, 'sub', subIdx + 1);
         } else {
             if (boxIndex + 1 < displayRows.length) {
                 setFocus(boxIndex + 1, 'box');
@@ -2459,8 +2493,7 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
                 if (focusLevel === 'sub') {
                     if (box.activeSubIndex > 0) {
                         markSubScore(currentRowIndex, box.activeSubIndex - 1, 0, 'pending');
-                        box.activeSubIndex--;
-                        renderTable();
+                        setFocus(currentRowIndex, 'sub', box.activeSubIndex - 1);
                     } else {
                         exitSubFocus(currentRowIndex);
                     }
