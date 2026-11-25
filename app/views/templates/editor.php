@@ -18,7 +18,7 @@
 
 
 
-// _SIG_v2_20261121230000 — OPcache 강제 갱신 마커
+// _SIG_v2_20261125020000 — 세션 만료 시 팝업 재로그인 및 자동 재저장 플로우 탑재
 if (function_exists('opcache_invalidate')) {
     opcache_invalidate(__FILE__, true);
 }
@@ -1526,6 +1526,30 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
         </div>
 
+    </div>
+
+    <!-- 세션 만료 재로그인 및 작업 보존 모달 -->
+    <div class="modal-backdrop" id="reauthModal" style="display:none; align-items:center; justify-content:center; z-index:10002; background:rgba(15,23,42,0.85); backdrop-filter:blur(4px);">
+        <div class="modal-card" style="background:#ffffff; color:#1e293b; max-width:480px; width:90%; border-radius:16px; padding:32px 26px 26px; text-align:center; border:1px solid #cbd5e1; box-shadow:0 20px 45px rgba(0,0,0,0.35);">
+            <div style="font-size:44px; margin-bottom:10px;">🔒</div>
+            <h3 style="margin:0 0 10px; font-size:1.3rem; font-weight:800; color:#0f172a;">로그인 세션 만료 안내</h3>
+            <p style="margin:0 0 14px; font-size:0.94rem; color:#475569; line-height:1.6;">
+                장시간 자리를 비우시어 서버 로그인 세션이 만료되었습니다.
+            </p>
+            <div style="background:#f0f9ff; border:1.5px solid #bae6fd; color:#0369a1; padding:12px 14px; border-radius:10px; margin-bottom:20px; font-size:13px; text-align:left; line-height:1.55;">
+                <strong style="display:block; margin-bottom:4px; font-size:13.5px; color:#0284c7;">🛡️ 작성 중인 내용은 안전하게 보존되어 있습니다!</strong>
+                새로고침을 하거나 페이지를 벗어나실 필요 없이, 아래 버튼을 눌러 새 창에서 로그인하시면 <strong>현재 편집 내용이 즉시 안전하게 자동 저장</strong>됩니다.
+            </div>
+            <div style="display:flex; flex-direction:column; gap:10px;">
+                <button type="button" id="btnOpenReauthPopup" onclick="openReauthPopup()" style="background:#2563eb; color:#ffffff; border:none; padding:13px 20px; border-radius:10px; font-size:1.02rem; font-weight:700; cursor:pointer; box-shadow:0 4px 14px rgba(37,99,235,0.35); transition:all 0.2s;">
+                    🔑 새 창에서 로그인하고 저장 완료하기
+                </button>
+                <button type="button" onclick="closeReauthModal()" style="background:#f8fafc; color:#64748b; border:1px solid #cbd5e1; padding:10px 16px; border-radius:8px; font-size:0.88rem; font-weight:600; cursor:pointer;">
+                    닫기 (나중에 저장)
+                </button>
+            </div>
+            <div id="reauthStatusText" style="margin-top:14px; font-size:0.86rem; color:#64748b; min-height:20px;"></div>
+        </div>
     </div>
 
 
@@ -3226,7 +3250,6 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
 
         // 선 잇기 방향 설정 (세로형 / 가로형)
-
         function setMatchingDirection(idx, dir) {
             const r = rois[idx];
             if (!r) return;
@@ -3234,6 +3257,16 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
             r.matching_direction = dir;
             if (!r.matching_info) r.matching_info = {};
             r.matching_info.direction = dir;
+
+            // 방향 전환 시 기존 가상 점들 또는 AI 미인식 점들을 해당 방향에 맞게 즉시 재배치
+            if (Array.isArray(r.matching_info.source_dots)) {
+                r.matching_info.source_dots = r.matching_info.source_dots.filter(d => !d.is_synthetic);
+            }
+            if (Array.isArray(r.matching_info.target_dots)) {
+                r.matching_info.target_dots = r.matching_info.target_dots.filter(d => !d.is_synthetic);
+            }
+            ensureMatchingDotsInitialized(r, true);
+
             console.log('[Matching] Direction updated', { idx, displayNum: r.display_num, direction: dir });
             draw();
             renderSidebar();
@@ -3380,94 +3413,28 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
 
                 // 문항 영역 크롭 계산 (문항 시작점부터 다음 문항 바로 위까지)
-
-
-
-                const topY = r.num_roi ? Math.max(0, r.num_roi.y - 10) : Math.max(0, r.ans_roi.y - 30);
-
-
-
-                
-
-
+                const topY = r.num_roi ? Math.max(0, r.num_roi.y - 40) : Math.max(0, r.ans_roi.y - 40);
 
                 // 같은 페이지의 다른 문항들 중 아래쪽에 위치한 첫 문항 탐색
-
-
-
                 const samePageRois = rois.filter((other, oIdx) => oIdx !== idx && (other.page_uid === r.page_uid || other.page === r.page));
-
-
-
                 const thisColLeft = (r.num_roi ? r.num_roi.x : r.ans_roi.x) < pageImg.naturalWidth * 0.5;
-
-
-
                 const nextQuestions = samePageRois.filter(other => {
-
-
-
                     const otherX = other.num_roi ? other.num_roi.x : other.ans_roi.x;
-
-
-
                     const otherIsLeft = (otherX < pageImg.naturalWidth * 0.5);
-
-
-
                     if (otherIsLeft !== thisColLeft) return false;
-
-
-
                     const otherY = (other.num_roi ? other.num_roi.y : other.ans_roi.y);
-
-
-
                     return otherY > (r.num_roi ? r.num_roi.y + 15 : r.ans_roi.y);
-
-
-
                 }).sort((a, b) => {
-
-
-
                     const ay = a.num_roi ? a.num_roi.y : a.ans_roi.y;
-
-
-
                     const by = b.num_roi ? b.num_roi.y : b.ans_roi.y;
-
-
-
                     return ay - by;
-
-
-
                 });
 
-
-
-
-
-
-
                 let bottomY = (nextQuestions.length > 0)
+                    ? (nextQuestions[0].num_roi ? nextQuestions[0].num_roi.y - 6 : nextQuestions[0].ans_roi.y - 6)
+                    : Math.min(pageImg.naturalHeight - 15, topY + 700);
 
-
-
-                    ? (nextQuestions[0].num_roi ? nextQuestions[0].num_roi.y - 5 : nextQuestions[0].ans_roi.y - 5)
-
-
-
-                    : Math.min(pageImg.naturalHeight - 15, topY + 550);
-
-
-
-                
-
-
-
-                bottomY = Math.min(pageImg.naturalHeight, Math.max(topY + 100, bottomY));
+                bottomY = Math.min(pageImg.naturalHeight, Math.max(topY + 200, bottomY));
 
 
 
@@ -3593,25 +3560,14 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
                 const json = await resp.json();
 
-
-
-                if (!json.success || !json.data) {
-
-
-
-                    throw new Error(json.message || 'AI 분석에 실패했습니다.');
-
-
-
+                if (!json.success) {
+                    throw new Error(json.message || json.error || 'AI 분석에 실패했습니다.');
                 }
 
-
-
-
-
-
-
-                const resData = json.data;
+                const resData = json.data || json;
+                if (!resData || (!resData.source_dots && !resData.target_dots && !resData.is_matching)) {
+                    throw new Error(json.message || json.error || 'AI 분석 데이터를 수신하지 못했습니다.');
+                }
                 // [Q16 DEBUG] Gemini API raw 응답 확인 — source_dots norm_x 문제 원인 추적
                 if (resData.source_dots && resData.source_dots.length > 0) {
                     console.log('[Q16 DEBUG] Gemini raw source_dots:', JSON.stringify(
@@ -3939,7 +3895,7 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
         // 선잇기 문항의 모든 페어가 고유한 앵커 객체를 갖도록 보장하는 동기화 헬퍼
 
-        function ensureMatchingDotsInitialized(r) {
+        function ensureMatchingDotsInitialized(r, forceRecreate = false) {
             if (!r.matching_info) {
                 r.matching_info = {
                     direction: (r.ans_roi && r.ans_roi.h > r.ans_roi.w * 0.75) ? 'vertical' : 'horizontal',
@@ -3956,12 +3912,17 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
             if (!Array.isArray(r.matching_info.source_dots)) r.matching_info.source_dots = [];
             if (!Array.isArray(r.matching_info.target_dots)) r.matching_info.target_dots = [];
 
+            if (forceRecreate) {
+                r.matching_info.source_dots = r.matching_info.source_dots.filter(d => !d.is_synthetic);
+                r.matching_info.target_dots = r.matching_info.target_dots.filter(d => !d.is_synthetic);
+            }
+
             // 1. source_dots 확인 및 누락분 자동 생성
             pairs.forEach((p, pIdx) => {
                 let found = r.matching_info.source_dots.find(d => matchMatchingLabels(d.label, p.from, pIdx));
                 if (!found) {
                     const normX = isVertical ? ((pIdx + 0.5) / Math.max(1, pairs.length)) : 0.42;
-                    const normY = isVertical ? 0.35 : ((pIdx + 0.5) / Math.max(1, pairs.length));
+                    const normY = isVertical ? 0.55 : ((pIdx + 0.5) / Math.max(1, pairs.length));
                     const newDot = {
                         label: p.from,
                         roi_norm_x: normX,
@@ -3970,6 +3931,7 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
                         abs_y: r.ans_roi ? (r.ans_roi.y + normY * r.ans_roi.h) : 0,
                         is_synthetic: true
                     };
+                    snapDotToNearestDarkBullet(r, newDot);
                     r.matching_info.source_dots.push(newDot);
                 }
             });
@@ -3992,6 +3954,7 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
                         abs_y: r.ans_roi ? (r.ans_roi.y + normY * r.ans_roi.h) : 0,
                         is_synthetic: true
                     };
+                    snapDotToNearestDarkBullet(r, newDot);
                     r.matching_info.target_dots.push(newDot);
                 }
             });
@@ -5628,7 +5591,7 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
                                 <div style="display:flex; gap:4px; width:100%;">
                                     <button type="button" class="btn" style="flex:1; font-size:10.5px; padding:3px 4px; border-radius:4px; font-weight:600; cursor:pointer; background:${curDir === 'horizontal' ? '#0284c7' : 'rgba(255,255,255,0.08)'}; color:#fff; border:1px solid ${curDir === 'horizontal' ? '#38bdf8' : 'rgba(255,255,255,0.15)'};" onclick="setMatchingDirection(${idx}, 'horizontal')">가로형 (좌➔우)</button>
                                     <button type="button" class="btn" style="flex:1; font-size:10.5px; padding:3px 4px; border-radius:4px; font-weight:600; cursor:pointer; background:${curDir === 'vertical' ? '#0284c7' : 'rgba(255,255,255,0.08)'}; color:#fff; border:1px solid ${curDir === 'vertical' ? '#38bdf8' : 'rgba(255,255,255,0.15)'};" onclick="setMatchingDirection(${idx}, 'vertical')">세로형 (위➔아래)</button>
-                                    <button type="button" class="btn" style="font-size:10.5px; padding:3px 6px; border-radius:4px; font-weight:600; cursor:pointer; background:rgba(255,255,255,0.08); color:#38bdf8; border:1px solid rgba(56,189,248,0.4);" onclick="triggerGeminiMatchingAnalysis(${idx})" title="Gemini AI로 점 위치 재분석">🔄 AI 재분석</button>
+                                    <button type="button" class="btn" id="btn-ai-${idx}" style="font-size:10.5px; padding:3px 6px; border-radius:4px; font-weight:600; cursor:pointer; background:rgba(255,255,255,0.08); color:#38bdf8; border:1px solid rgba(56,189,248,0.4);" onclick="triggerGeminiMatchingAnalysis(${idx})" title="Gemini AI로 점 위치 재분석">🔄 AI 재분석</button>
                                 </div>
                             </div>
                             <div class="matching-diagram-thumb-wrap">
@@ -6783,178 +6746,267 @@ function renderMatchingCropPreviews() {
 
 
 
-        // 최종 템플릿 저장 (Contract A, B 동시 전송)
+        // -------------------------------------------------------------
+        // 세션 만료 재로그인 및 자동 재저장 플로우
+        // -------------------------------------------------------------
+        let reauthWindow = null;
 
-        function saveTemplate() {
+        function showReauthModal() {
+            const modal = document.getElementById('reauthModal');
+            if (modal) {
+                modal.style.display = 'flex';
+                const statusEl = document.getElementById('reauthStatusText');
+                if (statusEl) {
+                    statusEl.innerHTML = '<span style="color:#64748b;">로그인 완료 시 현재 수정 내용이 즉시 자동 저장됩니다.</span>';
+                }
+            }
+        }
 
-            if (rois.length === 0) {
+        function closeReauthModal() {
+            const modal = document.getElementById('reauthModal');
+            if (modal) modal.style.display = 'none';
+        }
 
-                alert('설정된 ROI가 없습니다. 영역을 먼저 지정해주세요.');
-
-                return;
-
+        function openReauthPopup() {
+            const statusEl = document.getElementById('reauthStatusText');
+            if (statusEl) {
+                statusEl.innerHTML = '<span style="color:#2563eb; font-weight:600;">⏳ 로그인 창이 열렸습니다. 로그인을 진행해주세요...</span>';
             }
 
+            const width = 520;
+            const height = 680;
+            const left = Math.max(0, Math.round(window.screenX + (window.outerWidth - width) / 2));
+            const top = Math.max(0, Math.round(window.screenY + (window.outerHeight - height) / 2));
 
+            reauthWindow = window.open(
+                '/views/auth/login.php?popup=1',
+                'ssg_reauth_popup',
+                `width=${width},height=${height},left=${left},top=${top},scrollbars=yes,resizable=yes,status=no`
+            );
 
-            fetch('/api/templates/save.php', {
+            if (!reauthWindow || reauthWindow.closed || typeof reauthWindow.closed === 'undefined') {
+                alert('브라우저에서 팝업이 차단되었습니다.\n주소창 우측 상단의 팝업 차단을 해제하고 다시 시도해주세요.');
+            }
+        }
 
-                method: 'POST',
-
-                headers: { 'Content-Type': 'application/json' },
-
-                body: JSON.stringify({
-
-                    template_id: templateId,
-
-                    roi_data: rois,
-
-                    pages_data: pages,
-
-                    privacy_mask_data: privacyMaskRois
-
-                })
-
-            })
-
-            .then(res => res.json())
-
-            .then(data => {
-
-                if (data.success) {
-
-                    alert('템플릿 설정(페이지 및 ROI)이 성공적으로 저장되었습니다.');
-
-                    location.href = '/views/dashboard/main.php';
-
-                } else {
-
-                    alert('저장 실패: ' + (data.error || data.message || '알 수 없는 오류'));
-
+        // 팝업으로부터 로그인 완료 신호(postMessage) 수신
+        window.addEventListener('message', function(event) {
+            if (event.origin !== window.location.origin) return;
+            if (event.data && (event.data.type === 'SSG_AUTH_SUCCESS' || event.data === 'SSG_AUTH_SUCCESS')) {
+                console.log('[SSG Reauth] 재로그인 성공 신호 수신됨! 자동 재저장 실행');
+                const statusEl = document.getElementById('reauthStatusText');
+                if (statusEl) {
+                    statusEl.innerHTML = '<span style="color:#16a34a; font-weight:700;">✅ 인증 확인 완료! 수정한 템플릿을 저장하는 중...</span>';
                 }
 
+                try {
+                    if (reauthWindow && !reauthWindow.closed) {
+                        reauthWindow.close();
+                    }
+                } catch(e) {}
+
+                setTimeout(function() {
+                    closeReauthModal();
+                    saveTemplate(true); // 재인증 성공 후 자동 저장 플래그
+                }, 600);
+            }
+        });
+
+        // -------------------------------------------------------------
+        // 백그라운드 세션 유지 핑 (Heartbeat) - 5분마다 무음 실행
+        // -------------------------------------------------------------
+        setInterval(function() {
+            fetch('/api/auth/ping.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
             })
+            .then(res => {
+                if (res.status === 401) {
+                    console.warn('[SSG Session] 서버 세션이 만료되었습니다. 저장 시 재인증 모달이 표시됩니다.');
+                }
+            })
+            .catch(err => {
+                console.debug('[SSG Ping]', err);
+            });
+        }, 5 * 60 * 1000);
 
-            .catch(err => alert('서버 통신 오류가 발생했습니다: ' + err.message));
+        // 최종 템플릿 저장 (Contract A, B 동시 전송)
+        function saveTemplate(isRetry = false) {
+            if (rois.length === 0) {
+                alert('설정된 ROI가 없습니다. 영역을 먼저 지정해주세요.');
+                return;
+            }
 
+            const saveBtn = document.querySelector('.btn-save');
+            const originalBtnText = saveBtn ? saveBtn.textContent : '';
+            if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.textContent = isRetry ? '💾 인증 갱신 후 저장 중...' : '💾 저장 중...';
+            }
+
+            fetch('/api/templates/save.php', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    template_id: templateId,
+                    roi_data: rois,
+                    pages_data: pages,
+                    privacy_mask_data: privacyMaskRois
+                })
+            })
+            .then(async res => {
+                // 1. 401 Unauthorized 사전 감지 (Dothome 아파치 HTML 에러 페이지 사전 차단)
+                if (res.status === 401) {
+                    showReauthModal();
+                    return null;
+                }
+
+                // 2. 비정상 응답 (403, 500, 리다이렉트 등)
+                if (!res.ok) {
+                    const text = await res.text();
+                    try {
+                        const json = JSON.parse(text);
+                        if (json.session_expired || json.redirect || json.error?.includes('로그인')) {
+                            showReauthModal();
+                            return null;
+                        }
+                        throw new Error(json.error || json.message || ('HTTP ' + res.status));
+                    } catch (parseErr) {
+                        if (text.includes('Unauthorized') || text.includes('로그인') || text.includes('login') || res.status === 403) {
+                            showReauthModal();
+                            return null;
+                        }
+                        throw new Error('서버 응답 오류 (HTTP ' + res.status + ')');
+                    }
+                }
+
+                return res.json();
+            })
+            .then(data => {
+                if (!data) return; // 401 재인증 플로우 진행 중
+
+                if (data.success) {
+                    alert(isRetry 
+                        ? '인증이 갱신되어 템플릿 설정(페이지 및 ROI)이 성공적으로 저장되었습니다!' 
+                        : '템플릿 설정(페이지 및 ROI)이 성공적으로 저장되었습니다.');
+                    location.href = '/views/dashboard/main.php';
+                } else {
+                    if (data.session_expired || data.error?.includes('로그인') || data.message?.includes('로그인')) {
+                        showReauthModal();
+                    } else {
+                        alert('저장 실패: ' + (data.error || data.message || '알 수 없는 오류'));
+                    }
+                }
+            })
+            .catch(err => {
+                // Dothome 등에서 HTML이 넘어와 SyntaxError('<')가 난 경우에도 안전하게 재로그인 모달 표시
+                if (err.message && (err.message.includes('Unexpected token') || err.message.includes('JSON.parse'))) {
+                    showReauthModal();
+                } else {
+                    alert('서버 통신 오류가 발생했습니다: ' + err.message);
+                }
+            })
+            .finally(() => {
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.textContent = originalBtnText || '💾 템플릿 설정 저장하기';
+                }
+            });
         }
 
 
 
         // AI 자동 완성 다시 받기 API 호출
-
         async function reExtractAi() {
-
             if (rois.length > 0) {
-
-                if (!confirm("기존에 설정된 문항 및 ROI 영역이 Upstage AI 자동 인식 결과로 덮어씌워집니다. 계속하시겠습니까?")) {
-
+                if (!confirm("기존에 설정된 ROI 영역(사각형)이 Upstage AI 자동 인식 결과로 갱신됩니다.\n(입력된 정답과 배점은 안전하게 보존됩니다.) 계속하시겠습니까?")) {
                     return;
-
                 }
-
             }
-
-
 
             showToast("✨ Upstage AI가 시험지 문항과 영역을 정밀하게 다시 추출하고 있습니다...", 6000);
 
-
-
             try {
-
-                const response = await fetch('/api/templates/auto_extract.php', {
-
-                    method: 'POST',
-
-                    headers: { 'Content-Type': 'application/json' },
-
-                    body: JSON.stringify({ template_id: templateId })
-
+                // 기존 사용자 입력 정답/배점/채점기준/선잇기 정보 백업 (display_num 및 id 기준 매핑)
+                const answerBackupMap = new Map();
+                rois.forEach(r => {
+                    const data = {
+                        answer: r.answer || '',
+                        score: r.score,
+                        has_partial_score: r.has_partial_score,
+                        sub_scores: r.sub_scores,
+                        criteria: r.criteria || '',
+                        matching_direction: r.matching_direction,
+                        matching_info: r.matching_info,
+                        pairs: r.pairs
+                    };
+                    if (r.display_num) answerBackupMap.set(String(r.display_num), data);
+                    if (r.id) answerBackupMap.set(String(r.id), data);
                 });
 
+                const response = await fetch('/api/templates/auto_extract.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ template_id: templateId })
+                });
                 const data = await response.json();
 
-
-
                 if (data.success) {
-
                     if (Array.isArray(data.privacy_mask_rois)) {
-
                         privacyMaskRois = data.privacy_mask_rois;
-
                     }
-
                     rois = (Array.isArray(data.rois) ? data.rois : []).map((r, i) => {
-
                         const pageNum = parseInt(r.page) || 1;
-
                         const matchedPage = pages.find(p => p.page_uid === r.page_uid) || pages[pageNum - 1] || pages[0];
-
                         const rawId = r.id || (i + 1);
-
                         const subId = r.sub_id || null;
-
                         const displayNum = r.display_num || (subId ? `${rawId}-${subId}` : `${rawId}`);
 
+                        // 기존 백업 정답 및 점수 복원 (display_num 우선, id 차선)
+                        const backup = answerBackupMap.get(String(displayNum)) || answerBackupMap.get(String(rawId)) || {};
+                        const preservedAnswer = (backup.answer !== undefined && backup.answer !== '') ? backup.answer : (r.answer || '');
+                        const preservedScore = (backup.score !== undefined && backup.score !== 0) ? backup.score : (typeof r.score === 'number' ? r.score : 0);
+                        const preservedPartial = backup.has_partial_score !== undefined ? Boolean(backup.has_partial_score) : Boolean(r.has_partial_score);
+                        const preservedSubScores = (backup.sub_scores && Object.keys(backup.sub_scores).length > 0) ? backup.sub_scores : ((typeof r.sub_scores === 'object' && r.sub_scores !== null) ? r.sub_scores : {});
+                        const preservedCriteria = (backup.criteria !== undefined && backup.criteria !== '') ? backup.criteria : (r.criteria || '');
+                        const preservedDirection = backup.matching_direction || r.matching_direction || 'auto';
+                        const preservedMatchingInfo = r.matching_info || backup.matching_info || null;
+
                         return {
-
                             id: rawId,
-
                             sub_id: subId,
-
                             display_num: displayNum,
-
                             page_uid: r.page_uid || (matchedPage ? matchedPage.page_uid : 'p_1_default'),
-
                             page: matchedPage ? matchedPage.page_num : pageNum,
-
                             num_roi: r.num_roi || { x: 50, y: 50, w: 50, h: 30 },
-
                             ans_roi: r.ans_roi || { x: 110, y: 50, w: 60, h: 35 },
-
                             ans_rois: Array.isArray(r.ans_rois) ? r.ans_rois : null,
-
                             type: r.type || 'objective',
-
                             sub_type: r.sub_type || r.type || 'objective',
-
-                            answer: r.answer || '',
-
-                            score: typeof r.score === 'number' ? r.score : 0,
-
-                            has_partial_score: Boolean(r.has_partial_score),
-
-                            sub_scores: (typeof r.sub_scores === 'object' && r.sub_scores !== null) ? r.sub_scores : {},
-
-                            criteria: r.criteria || '',
-
-                            matching_direction: r.matching_direction || 'auto'
-
+                            answer: preservedAnswer,
+                            score: preservedScore,
+                            has_partial_score: preservedPartial,
+                            sub_scores: preservedSubScores,
+                            criteria: preservedCriteria,
+                            matching_direction: preservedDirection,
+                            matching_info: preservedMatchingInfo,
+                            pairs: r.pairs || backup.pairs || null
                         };
-
                     });
 
                     draw();
-
                     renderSidebar();
-
                     renderPageTabs();
-
-                    showToast(`🎉 총 ${rois.length}개 문항의 AI 자동 완성이 완료되었습니다!`, 4000);
-
+                    showToast(`🎉 총 ${rois.length}개 문항의 AI 영역 재추출이 완료되었습니다! (기존 정답/배점 안전 보존)`, 4000);
                 } else {
-
                     alert("AI 자동 완성 실패: " + (data.error || "문항을 추출하지 못했습니다."));
-
                 }
-
             } catch (err) {
-
                 alert("서버 통신 오류: " + err.message);
-
             }
-
         }
 
 
