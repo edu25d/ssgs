@@ -25,9 +25,9 @@ try {
         FROM assignments a
         JOIN templates t ON a.template_id = t.id
         LEFT JOIN classes c ON a.class_id = c.id
-        WHERE a.id = :aid AND (t.user_id = :uid OR c.user_id = :uid)
+        WHERE a.id = :aid AND (t.user_id = :t_uid OR c.user_id = :c_uid)
     ");
-    $stmt->execute(['aid' => $assignmentId, 'uid' => $userId]);
+    $stmt->execute(['aid' => $assignmentId, 't_uid' => $userId, 'c_uid' => $userId]);
     $assignRow = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$assignRow) {

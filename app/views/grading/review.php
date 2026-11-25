@@ -25,9 +25,9 @@ try {
         FROM assignments a 
         JOIN templates t ON a.template_id = t.id 
         LEFT JOIN classes c ON a.class_id = c.id
-        WHERE a.id = :id AND (t.user_id = :uid OR c.user_id = :uid)
+        WHERE a.id = :id AND (t.user_id = :t_uid OR c.user_id = :c_uid)
     ");
-    $stmt->execute(['id' => $assignId, 'uid' => $userId]);
+    $stmt->execute(['id' => $assignId, 't_uid' => $userId, 'c_uid' => $userId]);
     $info = $stmt->fetch(PDO::FETCH_ASSOC);
     $showAnswer = (int)($info['show_answer'] ?? 0);
 } catch (Exception $e) {
@@ -36,9 +36,9 @@ try {
         FROM assignments a 
         JOIN templates t ON a.template_id = t.id 
         LEFT JOIN classes c ON a.class_id = c.id
-        WHERE a.id = :id AND (t.user_id = :uid OR c.user_id = :uid)
+        WHERE a.id = :id AND (t.user_id = :t_uid OR c.user_id = :c_uid)
     ");
-    $stmt->execute(['id' => $assignId, 'uid' => $userId]);
+    $stmt->execute(['id' => $assignId, 't_uid' => $userId, 'c_uid' => $userId]);
     $info = $stmt->fetch(PDO::FETCH_ASSOC);
 }
 if (!$info) {
