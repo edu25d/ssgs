@@ -625,3 +625,202 @@ if (!function_exists('autoAnalyzeMatchingRoisServerSide')) {
         return $analyzedCount;
     }
 }
+
+if (!function_exists('gradeMatchingLinesLocal')) {
+    /**
+     * 학생 답안 선긋기(matching_line) 영역 이미지에서 로컬 픽셀 광선투사(Raycasting)로
+     * 시작점-도착점 연결선을 감지하여 토큰 소모 없이(비용 0원) 즉시 자동 채점
+     *
+     * @param resource|\GdImage $cropImg 학생 크롭 GD 이미지
+     * @param array $matchingInfo 템플릿의 matching_info (source_dots, target_dots, pairs 등)
+     * @param string $answerKey '(1)-㉢, (2)-㉡' 등 정답표 문자열
+     * @param float $maxScore 문항 배점
+     * @param bool $hasPartialScore 부분점수 인정 여부
+     * @param array $subScores 쌍별 배점 설정
+     * @return array ['detected_pairs' => ..., 'is_correct' => ..., 'status' => ..., 'currentScore' => ..., 'summary_text' => ...]
+     */
+    function gradeMatchingLinesLocal($cropImg, array $matchingInfo, string $answerKey = '', float $maxScore = 0.0, bool $hasPartialScore = false, array $subScores = []): array {
+        if (!$cropImg || (!is_resource($cropImg) && !is_object($cropImg))) {
+            return [
+                'detected_pairs' => [],
+                'is_correct'     => false,
+                'status'         => -1,
+                'currentScore'   => 0.0,
+                'summary_text'   => '이미지 로드 실패'
+            ];
+        }
+
+        $w = imagesx($cropImg);
+        $h = imagesy($cropImg);
+        if ($w <= 10 || $h <= 10) {
+            return [
+                'detected_pairs' => [],
+                'is_correct'     => false,
+                'status'         => -1,
+                'currentScore'   => 0.0,
+                'summary_text'   => '크롭 영역 유효하지 않음'
+            ];
+        }
+
+        $sourceDots = $matchingInfo['source_dots'] ?? [];
+        $targetDots = $matchingInfo['target_dots'] ?? [];
+
+        // 정답 pairs 파싱
+        $modelPairs = [];
+        if (!empty($matchingInfo['pairs']) && is_array($matchingInfo['pairs'])) {
+            $modelPairs = $matchingInfo['pairs'];
+        } elseif (!empty($answerKey)) {
+            if (preg_match_all('/\(([\d\w가-힣]+)\)\s*[-~–—]\s*([㉠-㉭㉮-㉻\w가-힣]+)/u', $answerKey, $m)) {
+                for ($k = 0; $k < count($m[0]); $k++) {
+                    $modelPairs[] = ['from' => '(' . trim($m[1][$k]) . ')', 'to' => trim($m[2][$k])];
+                }
+            }
+        }
+
+        if (empty($sourceDots) || empty($targetDots)) {
+            return [
+                'detected_pairs' => [],
+                'is_correct'     => false,
+                'status'         => -1,
+                'currentScore'   => 0.0,
+                'summary_text'   => '기준점 정보 없음'
+            ];
+        }
+
+        $detectedPairs = [];
+
+        foreach ($sourceDots as $sIdx => $sDot) {
+            $sLabel = trim((string)($sDot['label'] ?? ('(' . ($sIdx + 1) . ')')));
+            $sNormX = toNorm01($sDot['roi_norm_x'] ?? ($sDot['norm_x'] ?? 0.2));
+            $sNormY = toNorm01($sDot['roi_norm_y'] ?? ($sDot['norm_y'] ?? 0.5));
+            $sx = (int)round($sNormX * $w);
+            $sy = (int)round($sNormY * $h);
+
+            $bestTargetLabel = '';
+            $bestTargetScore = 0.0;
+
+            foreach ($targetDots as $tIdx => $tDot) {
+                $tLabel = trim((string)($tDot['label'] ?? chr(ord('A') + $tIdx)));
+                $tNormX = toNorm01($tDot['roi_norm_x'] ?? ($tDot['norm_x'] ?? 0.8));
+                $tNormY = toNorm01($tDot['roi_norm_y'] ?? ($tDot['norm_y'] ?? 0.5));
+                $tx = (int)round($tNormX * $w);
+                $ty = (int)round($tNormY * $h);
+
+                $dist = hypot($tx - $sx, $ty - $sy);
+                if ($dist < 15) continue;
+
+                $dx = ($tx - $sx) / $dist;
+                $dy = ($ty - $sy) / $dist;
+                $nx = -$dy;
+                $ny = $dx;
+
+                $sampleCount = 0;
+                $darkHits = 0;
+
+                $startDist = max(15.0, $dist * 0.15);
+                $endDist   = min($dist - 15.0, $dist * 0.85);
+
+                for ($step = $startDist; $step <= $endDist; $step += 2.0) {
+                    $sampleCount++;
+                    $px = $sx + $dx * $step;
+                    $py = $sy + $dy * $step;
+
+                    $bandDarkHit = false;
+                    for ($band = -5; $band <= 5; $band += 2) {
+                        $qx = (int)round($px + $nx * $band);
+                        $qy = (int)round($py + $ny * $band);
+
+                        if ($qx >= 0 && $qx < $w && $qy >= 0 && $qy < $h) {
+                            $rgb = imagecolorat($cropImg, $qx, $qy);
+                            $r = ($rgb >> 16) & 0xFF;
+                            $g = ($rgb >> 8) & 0xFF;
+                            $b = $rgb & 0xFF;
+                            if ($r < 145 && $g < 145 && $b < 145) {
+                                $bandDarkHit = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if ($bandDarkHit) {
+                        $darkHits++;
+                    }
+                }
+
+                $density = $sampleCount > 0 ? ($darkHits / $sampleCount) : 0.0;
+                if ($density > $bestTargetScore) {
+                    $bestTargetScore = $density;
+                    $bestTargetLabel = $tLabel;
+                }
+            }
+
+            if ($bestTargetScore >= 0.22 && !empty($bestTargetLabel)) {
+                $detectedPairs[] = [
+                    'from'       => $sLabel,
+                    'to'         => $bestTargetLabel,
+                    'confidence' => round($bestTargetScore, 2)
+                ];
+            }
+        }
+
+        $matchedPairsCount = 0;
+        $totalPairsCount = count($modelPairs);
+        $summaryParts = [];
+        $earnedScore = 0.0;
+
+        foreach ($modelPairs as $pi => $mp) {
+            $expectedFrom = trim($mp['from']);
+            $expectedTo   = trim($mp['to']);
+            $pairWeight   = isset($subScores[(string)($pi + 1)]) ? (float)$subScores[(string)($pi + 1)] : ($totalPairsCount > 0 ? ($maxScore / $totalPairsCount) : 0);
+
+            $foundPair = null;
+            foreach ($detectedPairs as $dp) {
+                if (trim($dp['from']) === $expectedFrom) {
+                    $foundPair = $dp;
+                    break;
+                }
+            }
+
+            if ($foundPair && trim($foundPair['to']) === $expectedTo) {
+                $matchedPairsCount++;
+                $earnedScore += $pairWeight;
+                $summaryParts[] = "{$expectedFrom}-{$expectedTo}[O]";
+            } else {
+                $actualTo = $foundPair ? trim($foundPair['to']) : '미연결';
+                $summaryParts[] = "{$expectedFrom}-{$actualTo}[X]";
+            }
+        }
+
+        $isAllCorrect = ($totalPairsCount > 0 && $matchedPairsCount === $totalPairsCount);
+        $isAllWrong   = ($matchedPairsCount === 0);
+
+        if ($hasPartialScore) {
+            if ($isAllCorrect) {
+                $status = 1;
+                $finalScore = $maxScore;
+            } elseif ($isAllWrong) {
+                $status = 0;
+                $finalScore = 0.0;
+            } else {
+                $status = 2;
+                $finalScore = round($earnedScore, 1);
+            }
+        } else {
+            if ($isAllCorrect) {
+                $status = 1;
+                $finalScore = $maxScore;
+            } else {
+                $status = 0;
+                $finalScore = 0.0;
+            }
+        }
+
+        return [
+            'detected_pairs' => $detectedPairs,
+            'is_correct'     => $isAllCorrect,
+            'status'         => $status,
+            'currentScore'   => $finalScore,
+            'summary_text'   => implode(', ', $summaryParts)
+        ];
+    }
+}

@@ -33,11 +33,20 @@ try {
     $newTotalScore = 0;
 
     foreach ($rawResults as &$res) {
-        $curItemId = (string)($res['item_id'] ?? $res['id'] ?? '');
+        $curItemId    = (string)($res['item_id'] ?? $res['id'] ?? '');
+        $curSubId     = isset($res['sub_id']) && $res['sub_id'] !== null ? (string)$res['sub_id'] : '';
+        $curDisplay   = (string)($res['display_num'] ?? ($curSubId !== '' ? "{$curItemId}-{$curSubId}" : $curItemId));
         
-        if ($curItemId === $itemId) {
+        // display_num(예: 3-1), 순수 item_id(단일문항), 또는 복합 키 일치 확인
+        $isMatch = ($curDisplay === $itemId) || ($curSubId === '' && $curItemId === $itemId);
+        if (!$isMatch && isset($input['sub_id']) && (string)$input['sub_id'] === $curSubId && $curItemId === (string)($input['parent_id'] ?? $input['raw_id'] ?? '')) {
+            $isMatch = true;
+        }
+        
+        if ($isMatch) {
             $res['currentScore'] = $score;
             $res['status']       = $status;
+            $res['is_manually_edited'] = true; // 교사 수기 수정 플래그 보존
             if (!empty($res['appeal'])) {
                 $res['appeal_resolved'] = true;
             }

@@ -441,6 +441,8 @@ function gradeObjectiveItems(array $items): array {
             'id'             => $id,
             'display_num'    => $item['display_num'] ?? (string)$id,
             'sub_id'         => $item['sub_id'] ?? null,
+            'page'           => (int)($item['page'] ?? 1),
+            'image_path'     => $item['image_path'] ?? '',
             'type'           => $itemType,
             'score'          => $maxScore,
             'currentScore'   => $currentScore,

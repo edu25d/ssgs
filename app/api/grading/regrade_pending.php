@@ -13,7 +13,8 @@ if (!$isLoggedIn) {
     jsonError('로그인이 필요합니다.', 401);
 }
 
-$assignmentId = (int)($_POST['assignment_id'] ?? $_GET['assignment_id'] ?? 0);
+$input = getJsonInput();
+$assignmentId = (int)($input['assignment_id'] ?? $_POST['assignment_id'] ?? $_GET['assignment_id'] ?? 0);
 if (!$assignmentId) {
     jsonError('평가 ID가 유효하지 않습니다.');
 }

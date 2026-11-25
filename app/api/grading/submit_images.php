@@ -7,6 +7,7 @@
 require_once dirname(__DIR__, 2) . '/config/db.php';
 require_once APP_ROOT . '/includes/common/response.php';
 require_once APP_ROOT . '/includes/grading/objective.php';
+require_once APP_ROOT . '/includes/common/gemini_matching.php';
 
 // [함수] 정답 유형 판별
 function getAttributeFromAnswer($ans) {
@@ -291,10 +292,13 @@ try {
                     'score'          => $roi['score'] ?? 0,
                     'answer'         => $roi['answer'] ?? '',
                     'attribute'      => getAttributeFromAnswer($roi['answer'] ?? ''),
-                    'image_res'      => $cropRes,
-                    'crop_url'       => $cropUrl,
-                    'crop_image_url' => $cropUrl,
-                    'image_path'     => $itemOriginalUrl
+                    'image_res'          => $cropRes,
+                    'crop_url'           => $cropUrl,
+                    'crop_image_url'     => $cropUrl,
+                    'image_path'         => $itemOriginalUrl,
+                    'matching_info'      => $roi['matching_info'] ?? [],
+                    'has_partial_score'  => !empty($roi['has_partial_score']),
+                    'sub_scores'         => $roi['sub_scores'] ?? []
                 ];
             }
         }
@@ -331,7 +335,8 @@ try {
         $initialRawResults = mergeGradingResults($initialAiGradingItems, $teacherReviewItems);
         foreach ($initialRawResults as &$rItem) {
             if (empty($rItem['image_path'])) {
-                $rItem['image_path'] = $primaryOriginalUrl;
+                $pNum = (int)($rItem['page'] ?? 1);
+                $rItem['image_path'] = $pageOriginalUrls[$pNum] ?? $primaryOriginalUrl;
             }
         }
         unset($rItem);
@@ -366,7 +371,8 @@ try {
             'teacher_review_items'     => $teacherReviewItems,
             'initial_ai_grading_items' => $initialAiGradingItems,
             'has_teacher_review_items' => $hasTeacherReviewItems,
-            'local_original_url'       => $primaryOriginalUrl
+            'local_original_url'       => $primaryOriginalUrl,
+            'page_original_urls'       => $pageOriginalUrls
         ];
     }
 
@@ -412,8 +418,50 @@ try {
         $initialAiGradingItems   = $task['initial_ai_grading_items'];
         $hasTeacherReviewItems   = $task['has_teacher_review_items'];
         $localOriginalUrl        = $task['local_original_url'];
+        $pageOriginalUrls        = $task['page_original_urls'] ?? [1 => $localOriginalUrl];
 
-        $aiGradingResults = gradeObjectiveItems($aiGradingItems);
+        $matchingLineItems = [];
+        $pureAiGradingItems = [];
+        foreach ($aiGradingItems as $oi) {
+            if (($oi['type'] ?? '') === 'matching_line') {
+                $matchingLineItems[] = $oi;
+            } else {
+                $pureAiGradingItems[] = $oi;
+            }
+        }
+
+        // 선잇기 문항은 로컬 픽셀 분석(토큰 0원)으로 즉시 채점
+        $matchingLineGradedResults = [];
+        foreach ($matchingLineItems as $mItem) {
+            $mRes = gradeMatchingLinesLocal(
+                $mItem['image_res'] ?? null,
+                $mItem['matching_info'] ?? [],
+                $mItem['answer'] ?? '',
+                (float)($mItem['score'] ?? 0),
+                !empty($mItem['has_partial_score']),
+                $mItem['sub_scores'] ?? []
+            );
+
+            $matchingLineGradedResults[] = [
+                'item_id'        => $mItem['id'],
+                'id'             => $mItem['id'],
+                'display_num'    => $mItem['display_num'] ?? (string)$mItem['id'],
+                'sub_id'         => $mItem['sub_id'] ?? null,
+                'page'           => (int)($mItem['page'] ?? 1),
+                'image_path'     => $mItem['image_path'] ?? '',
+                'type'           => 'matching_line',
+                'score'          => (float)($mItem['score'] ?? 0),
+                'currentScore'   => (float)($mRes['currentScore'] ?? 0),
+                'answer'         => $mItem['answer'] ?? '',
+                'rawText'        => $mRes['summary_text'] ?? '선잇기',
+                'status'         => $mRes['status'] ?? 0,
+                'detected_pairs' => $mRes['detected_pairs'] ?? [],
+                'crop_url'       => $mItem['crop_url'] ?? '',
+                'crop_image_url' => $mItem['crop_image_url'] ?? ''
+            ];
+        }
+
+        $aiGradingResults = !empty($pureAiGradingItems) ? gradeObjectiveItems($pureAiGradingItems) : ['items' => []];
 
         if (!empty($aiGradingResults['debug']['error'])) {
             @file_put_contents(APP_ROOT . '/gemini_debug.log', date('Y-m-d H:i:s') . ' [Objective Error] ' . json_encode($aiGradingResults['debug'], JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND);
@@ -433,10 +481,14 @@ try {
             }
         }
 
-        $actualAiGradingItems = $aiGradingResults['items'] ?? [];
-        if (empty($actualAiGradingItems) && !empty($aiGradingItems)) {
-            $actualAiGradingItems = $initialAiGradingItems;
+        $pureGradedItems = $aiGradingResults['items'] ?? [];
+        if (empty($pureGradedItems) && !empty($pureAiGradingItems)) {
+            $pureGradedItems = array_values(array_filter($initialAiGradingItems, function($it) {
+                return ($it['type'] ?? '') !== 'matching_line';
+            }));
         }
+
+        $actualAiGradingItems = array_merge($pureGradedItems, $matchingLineGradedResults);
 
         $finalRawResults = mergeGradingResults($actualAiGradingItems, $teacherReviewItems);
         $finalTotalScore = array_reduce($finalRawResults, function($acc, $item) {
@@ -445,7 +497,8 @@ try {
 
         foreach ($finalRawResults as &$rItem) {
             if (empty($rItem['image_path'])) {
-                $rItem['image_path'] = $localOriginalUrl;
+                $pNum = (int)($rItem['page'] ?? 1);
+                $rItem['image_path'] = $pageOriginalUrls[$pNum] ?? $localOriginalUrl;
             }
         }
         unset($rItem);

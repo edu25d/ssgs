@@ -25,9 +25,9 @@ try {
         FROM assignments a 
         JOIN templates t ON a.template_id = t.id 
         LEFT JOIN classes c ON a.class_id = c.id
-        WHERE a.id = :id
+        WHERE a.id = :id AND (t.user_id = :uid OR c.user_id = :uid)
     ");
-    $stmt->execute(['id' => $assignId]);
+    $stmt->execute(['id' => $assignId, 'uid' => $userId]);
     $info = $stmt->fetch(PDO::FETCH_ASSOC);
     $showAnswer = (int)($info['show_answer'] ?? 0);
 } catch (Exception $e) {
@@ -36,10 +36,13 @@ try {
         FROM assignments a 
         JOIN templates t ON a.template_id = t.id 
         LEFT JOIN classes c ON a.class_id = c.id
-        WHERE a.id = :id
+        WHERE a.id = :id AND (t.user_id = :uid OR c.user_id = :uid)
     ");
-    $stmt->execute(['id' => $assignId]);
+    $stmt->execute(['id' => $assignId, 'uid' => $userId]);
     $info = $stmt->fetch(PDO::FETCH_ASSOC);
+}
+if (!$info) {
+    die("과제를 찾을 수 없거나 열람 권한이 없습니다.");
 }
 $examName = $info ? ($info['template_name'] . ($info['class_name'] ? ' - ' . $info['class_name'] : '')) : '평가 점검';
 
@@ -299,6 +302,59 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
         tr.partial-mode .partial-input-wrapper { display: block; }
         .partial-input { width: 70px; padding: 6px; font-size: 1.1em; text-align: center; border: 2px solid #ffc107; border-radius: 6px; font-weight: bold; outline: none; }
         .empty-msg { text-align: center; padding: 50px; font-size: 1.2em; color: #6c757d; }
+
+        /* 루브릭 카드 스타일 */
+        .rubric-info-card {
+            background: #f8fafc;
+            border-left: 4px solid #3b82f6;
+            padding: 10px 16px;
+            margin: 0 0 14px 0;
+            border-radius: 6px;
+            font-size: 0.88rem;
+            color: #334155;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .rubric-info-card b { color: #1d4ed8; }
+        
+        /* 서브 칩 (소문항 하위 필터) */
+        .sub-chips-container {
+            display: flex;
+            gap: 8px;
+            margin: 8px 0 14px 0;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .sub-chip {
+            padding: 4px 12px;
+            border-radius: 14px;
+            border: 1px solid #cbd5e1;
+            background: #f1f5f9;
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: #475569;
+            cursor: pointer;
+            transition: 0.15s;
+        }
+        .sub-chip:hover { background: #e2e8f0; }
+        .sub-chip.active { background: #2563eb; color: white; border-color: #2563eb; }
+        
+        /* 부분점수 퀵 프리셋 버튼 */
+        .preset-score-btn {
+            padding: 3px 7px;
+            margin: 2px;
+            border-radius: 4px;
+            border: 1px solid #f59e0b;
+            background: #fffbeb;
+            color: #b45309;
+            font-size: 0.78rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: 0.15s;
+        }
+        .preset-score-btn:hover { background: #fde68a; }
     </style>
 </head>
 <body>
@@ -327,12 +383,17 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
             <input type="checkbox" id="chkShowAnswer" onchange="toggleAnswerVisibility()" <?= $showAnswer ? 'checked' : '' ?>>
             <span style="color: #6d28d9; font-weight: 800;">💡 학생에게 모범 답안 공개</span>
         </label>
+        <button type="button" id="btnSyncTemplate" class="btn-regrade" onclick="syncWithTemplate()" style="background: linear-gradient(135deg, #059669, #10b981); color: white; border: none; padding: 7px 14px; border-radius: 8px; font-weight: 800; font-size: 0.88rem; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 2px 6px rgba(16,185,129,0.25);">
+            <span>🔄</span> <span>템플릿 정답/배점 재동기화</span>
+        </button>
         <button type="button" id="btnRegradePending" class="btn-regrade" onclick="regradePending()" style="background: linear-gradient(135deg, #0d6efd, #6366f1); color: white; border: none; padding: 7px 14px; border-radius: 8px; font-weight: 800; font-size: 0.88rem; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 2px 6px rgba(13,110,253,0.25);">
             <span>⚡</span> <span>미판독 문항 AI 즉시 채점</span>
         </button>
     </div>
 
     <div class="sub-tabs" id="subTabsContainer"></div>
+    <div id="subChipsContainer" class="sub-chips-container" style="display:none;"></div>
+    <div id="rubricContainer"></div>
 
     <table id="reviewTable">
         <tbody id="studentList"></tbody>
@@ -363,6 +424,7 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
     let viewMode = savedState.viewMode || 'question';    
     let showSubjectiveOnly = false; // 진입 시 항상 전체 문항(객관식+주관식) 기본 표시
     let selectedFilterKey = savedState.selectedFilterKey || null; 
+    let selectedSubFilter = savedState.selectedSubFilter || 'all'; 
     
     let currentRowIndex = -1;
     let isPartialMode = false;
@@ -395,7 +457,8 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
         sessionStorage.setItem(storageKey, JSON.stringify({
             viewMode: viewMode,
             showSubjectiveOnly: showSubjectiveOnly,
-            selectedFilterKey: selectedFilterKey
+            selectedFilterKey: selectedFilterKey,
+            selectedSubFilter: selectedSubFilter
         }));
     }
 
@@ -453,13 +516,18 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
                 student_id: dbRow.student_id,
                 studentName: studentLabel,
                 item_id: itemId,
+                raw_id: rawId,
+                sub_id: subId,
+                page: parseInt(item.page || 1, 10),
                 type: item.type || 'objective',
                 score: maxScore,
                 currentScore: currentScore,
                 statusCode: statusCode,
                 status: statusStr,
                 answer: item.answer || item.model_answer || '미지정',
+                criteria: item.criteria || '',
                 rawText: recognizedText,
+                detected_pairs: item.detected_pairs || [],
                 isAiPending: isAiPending,
                 isUnread: isUnread,
                 crop_image_url: item.crop_url || item.crop_image_url || '',
@@ -515,6 +583,7 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
                 });
 
                 if (hasNewData) {
+                    if (isPartialMode) return;
                     const focusedTarget = displayRows[currentRowIndex];
                     applyFiltersAndRefresh(false);
                     if (focusedTarget) {
@@ -565,6 +634,44 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
         });
     }
 
+    function syncWithTemplate() {
+        if (!confirm("템플릿 에디터에서 수정한 최신 정답/배점을 전체 학생 결과에 반영하시겠습니까?\n\n- 선생님이 수기 검수한 점수는 안전하게 유지됩니다.\n- 배점이 변경된 부분점수 문항은 '재검수 필요' 상태로 전환됩니다.")) {
+            return;
+        }
+        const btn = document.getElementById('btnSyncTemplate');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = "<span>⏳</span> <span>템플릿 재동기화 중...</span>";
+        }
+
+        fetch('/api/grading/regrade_by_template.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ assignment_id: assignId })
+        })
+        .then(res => res.json())
+        .then(res => {
+            if (res.success) {
+                alert(res.message || '템플릿 동기화가 완료되었습니다.');
+                location.reload();
+            } else {
+                alert('동기화 실패: ' + (res.error || '알 수 없는 오류'));
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = "<span>🔄</span> <span>템플릿 정답/배점 재동기화</span>";
+                }
+            }
+        })
+        .catch(err => {
+            console.error('동기화 오류:', err);
+            alert('네트워크 통신 오류가 발생했습니다.');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = "<span>🔄</span> <span>템플릿 정답/배점 재동기화</span>";
+            }
+        });
+    }
+
     setInterval(fetchLatestResults, 3000);
 
     function toggleFilter() {
@@ -575,7 +682,10 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
 
     function applyFiltersAndRefresh(resetFocus = false) {
         filteredData = rawRowsData.filter(r => {
-            if (showSubjectiveOnly && r.type !== 'subjective') return false;
+            if (showSubjectiveOnly) {
+                const t = r.type || 'objective';
+                if (t !== 'subjective' && t !== 'short_answer' && t !== 'essay' && t !== 'matching_line') return false;
+            }
             return true;
         });
         refreshTabsAndView(resetFocus);
@@ -601,30 +711,127 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
         }
 
         if (viewMode === 'question') {
-            const questions = [];
+            const parentMap = new Map();
             filteredData.forEach(r => {
-                if (!questions.some(q => q.item_id === r.item_id)) {
-                    questions.push({ item_id: r.item_id, type: r.type });
+                const pId = String(r.raw_id || (r.item_id ? r.item_id.split('-')[0] : '1'));
+                if (!parentMap.has(pId)) {
+                    parentMap.set(pId, {
+                        parentId: pId,
+                        type: r.type,
+                        criteria: r.criteria || '',
+                        subItems: new Set()
+                    });
+                }
+                const pObj = parentMap.get(pId);
+                if (r.sub_id !== null && r.sub_id !== undefined && r.sub_id !== '') {
+                    pObj.subItems.add(String(r.item_id));
+                }
+                if (!pObj.criteria && r.criteria) {
+                    pObj.criteria = r.criteria;
                 }
             });
-            questions.sort((a,b) => String(a.item_id).localeCompare(String(b.item_id), undefined, { numeric: true }));
 
-            if (selectedFilterKey && !questions.some(q => q.item_id === selectedFilterKey)) {
+            const questions = Array.from(parentMap.values());
+            questions.sort((a,b) => String(a.parentId).localeCompare(String(b.parentId), undefined, { numeric: true }));
+
+            if (selectedFilterKey && !questions.some(q => q.parentId === selectedFilterKey)) {
                 selectedFilterKey = null;
+            }
+            if (!selectedFilterKey && questions.length > 0) {
+                selectedFilterKey = questions[0].parentId;
             }
 
             questions.forEach(q => {
                 const btn = document.createElement('button');
-                btn.className = `sub-tab-item ${q.item_id === selectedFilterKey ? 'active' : ''}`;
-                const badgeLabel = q.type === 'subjective' ? '주관식' : (q.type === 'sub_item' ? '소문항' : (q.type === 'short_answer' ? '단답형' : (q.type === 'matching_line' ? '선잇기' : '객관식')));
-                btn.innerHTML = `${q.item_id}번 <span class="type-badge">${badgeLabel}</span>`;
-                btn.onclick = () => { selectedFilterKey = q.item_id; saveState(); refreshTabsAndView(true); };
+                btn.className = `sub-tab-item ${q.parentId === selectedFilterKey ? 'active' : ''}`;
+                
+                let badgeLabel = '객관식';
+                if (q.subItems.size > 1) {
+                    badgeLabel = `소문항 ${q.subItems.size}`;
+                } else if (q.type === 'subjective') badgeLabel = '주관식';
+                else if (q.type === 'short_answer') badgeLabel = '단답형';
+                else if (q.type === 'matching_line') badgeLabel = '선잇기';
+                else if (q.type === 'sub_item') badgeLabel = '소문항';
+
+                btn.innerHTML = `${q.parentId}번 <span class="type-badge">${badgeLabel}</span>`;
+                btn.onclick = () => { 
+                    selectedFilterKey = q.parentId; 
+                    selectedSubFilter = 'all';
+                    saveState(); 
+                    refreshTabsAndView(true); 
+                };
                 container.appendChild(btn);
             });
 
-            displayRows = selectedFilterKey ? filteredData.filter(r => r.item_id === selectedFilterKey) : [];
+            const currentQ = questions.find(q => q.parentId === selectedFilterKey);
+
+            // 소문항 하위 서브 칩
+            const subChipsContainer = document.getElementById('subChipsContainer');
+            if (currentQ && currentQ.subItems.size > 1) {
+                subChipsContainer.style.display = 'flex';
+                subChipsContainer.innerHTML = '<span style="font-size:0.8rem; font-weight:800; color:#64748b; margin-right:4px;">소문항:</span>';
+                
+                const allChip = document.createElement('button');
+                allChip.type = 'button';
+                allChip.className = `sub-chip ${selectedSubFilter === 'all' ? 'active' : ''}`;
+                allChip.innerText = '🔍 전체 나란히 보기';
+                allChip.onclick = () => { selectedSubFilter = 'all'; saveState(); refreshTabsAndView(true); };
+                subChipsContainer.appendChild(allChip);
+
+                Array.from(currentQ.subItems).sort((a,b) => a.localeCompare(b, undefined, {numeric:true})).forEach(subKey => {
+                    const chip = document.createElement('button');
+                    chip.type = 'button';
+                    chip.className = `sub-chip ${selectedSubFilter === subKey ? 'active' : ''}`;
+                    chip.innerText = `${subKey}번만`;
+                    chip.onclick = () => { selectedSubFilter = subKey; saveState(); refreshTabsAndView(true); };
+                    subChipsContainer.appendChild(chip);
+                });
+            } else {
+                subChipsContainer.style.display = 'none';
+                subChipsContainer.innerHTML = '';
+            }
+
+            // 루브릭 안내 바
+            const rubricContainer = document.getElementById('rubricContainer');
+            if (currentQ && currentQ.criteria) {
+                rubricContainer.innerHTML = `
+                    <div class="rubric-info-card">
+                        <b>💡 ${currentQ.parentId}번 채점 기준 (루브릭):</b> 
+                        <span>${currentQ.criteria}</span>
+                    </div>
+                `;
+            } else {
+                rubricContainer.innerHTML = '';
+            }
+
+            if (selectedFilterKey) {
+                if (selectedSubFilter === 'all') {
+                    displayRows = filteredData.filter(r => {
+                        const pId = String(r.raw_id || (r.item_id ? r.item_id.split('-')[0] : '1'));
+                        return pId === selectedFilterKey;
+                    });
+                    displayRows.sort((a,b) => {
+                        if (a.db_id !== b.db_id) return a.db_id - b.db_id;
+                        return String(a.item_id).localeCompare(String(b.item_id), undefined, {numeric: true});
+                    });
+                } else {
+                    displayRows = filteredData.filter(r => r.item_id === selectedSubFilter);
+                }
+            } else {
+                displayRows = [];
+            }
 
         } else {
+            // 학생별 보기일 때는 루브릭/서브칩 숨김
+            const subChipsContainer = document.getElementById('subChipsContainer');
+            if (subChipsContainer) {
+                subChipsContainer.style.display = 'none';
+                subChipsContainer.innerHTML = '';
+            }
+            const rubricContainer = document.getElementById('rubricContainer');
+            if (rubricContainer) {
+                rubricContainer.innerHTML = '';
+            }
             const students = [];
             filteredData.forEach(r => {
                 if (!students.some(s => s.db_id === r.db_id)) {
@@ -671,7 +878,11 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
             if (index === currentRowIndex) tr.classList.add('focused');
             if (isPartialMode && index === currentRowIndex) tr.classList.add('partial-mode');
 
-            const firstColText = (viewMode === 'question') ? row.studentName : `${row.item_id}번`;
+            const pageBadge = row.page && row.page > 1 ? `<span style="font-size:0.75em; background:#e2e8f0; color:#475569; padding:1px 5px; border-radius:4px; margin-left:4px;">${row.page}쪽</span>` : '';
+            const subLabel = row.sub_id ? `<span style="display:inline-block; font-size:0.82em; background:#ede9fe; color:#6d28d9; padding:2px 6px; border-radius:4px; margin-left:4px;">${row.item_id}</span>` : '';
+            const firstColText = (viewMode === 'question') 
+                ? `<div>${row.studentName} ${subLabel} ${pageBadge}</div>` 
+                : `<div>${row.item_id}번 ${pageBadge}</div>`;
             const isSubjective = (row.type === 'subjective');
             const typeLabel = isSubjective
                 ? '<span style="color:#b45309; font-weight:700;">[주관식]</span>'
@@ -704,7 +915,14 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
             }
 
             let extractedAnswerHtml = '';
-            if (row.type !== 'subjective' && row.type !== 'essay') {
+            if (row.type === 'matching_line') {
+                const pairsText = row.rawText || '선잇기 미인식';
+                extractedAnswerHtml = `<div class="extracted-answer" style="margin-top:6px;">
+                    <span style="display:inline-block; padding:3px 8px; border-radius:4px; background:#eff6ff; color:#1d4ed8; font-weight:700; font-size:0.85em; border:1px solid #bfdbfe;">
+                        📏 선잇기 인식: <b>${pairsText}</b>
+                    </span>
+                </div>`;
+            } else if (row.type !== 'subjective' && row.type !== 'essay') {
                 if (row.isAiPending) {
                     extractedAnswerHtml = `<div class="extracted-answer"><span style="color:#2563eb; font-weight:700;">🤖 AI 판독 진행 중... ⏳</span></div>`;
                 } else {
@@ -740,6 +958,18 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
                 `;
             }
             
+            let presetBtnsHtml = '';
+            if (row.score > 1) {
+                const step = row.score >= 5 ? 1.0 : (row.score >= 3 ? 1.0 : 0.5);
+                const presetList = [];
+                for (let ps = row.score - step; ps > 0; ps -= step) {
+                    presetList.push(Math.round(ps * 10) / 10);
+                }
+                presetBtnsHtml = `<div style="margin-top:6px; display:flex; gap:4px; justify-content:center; flex-wrap:wrap;">` + presetList.map(ps => 
+                    `<button type="button" class="preset-score-btn" onclick="savePartialScore(${index}, ${ps})" title="${ps}점 즉시 부여">${ps}점</button>`
+                ).join('') + `</div>`;
+            }
+
             tr.innerHTML = `
                 <td>
                     <div style="font-size:1.15em; font-weight:800; color:#1e293b;">${firstColText}</div>
@@ -768,10 +998,13 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
                     <button class="score-btn btn-p" onclick="enterPartialMode(${index})"><b>[3]</b> △ 부분점수</button>
                     
                     <div class="partial-input-wrapper">
-                        <input type="number" class="partial-input" id="partialInput-${index}" 
-                               min="0" max="${row.score}" step="0.5" 
-                               value="${row.currentScore !== null ? row.currentScore : Math.floor(row.score/2)}">
-                        <span style="font-weight:bold;"> / ${row.score}점</span>
+                        <div>
+                            <input type="number" class="partial-input" id="partialInput-${index}" 
+                                   min="0" max="${row.score}" step="0.5" 
+                                   value="${row.currentScore !== null ? row.currentScore : Math.floor(row.score/2)}">
+                            <span style="font-weight:bold;"> / ${row.score}점</span>
+                        </div>
+                        ${presetBtnsHtml}
                     </div>
                 </td>
             `;
@@ -852,9 +1085,7 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
             case 'Backspace':
                 e.preventDefault();
                 if (currentRowIndex > 0) {
-                    displayRows[currentRowIndex - 1].status = 'pending';
-                    displayRows[currentRowIndex - 1].statusCode = -1;
-                    displayRows[currentRowIndex - 1].currentScore = 0;
+                    markScore(currentRowIndex - 1, 0, 'pending');
                     setFocus(currentRowIndex - 1);
                 }
                 break;
@@ -868,7 +1099,7 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
         
         if (forceStatus) {
             row.status = forceStatus;
-            row.statusCode = (forceStatus === 'correct') ? 1 : ((forceStatus === 'incorrect') ? 0 : 2);
+            row.statusCode = (forceStatus === 'correct') ? 1 : ((forceStatus === 'incorrect') ? 0 : ((forceStatus === 'pending') ? -1 : 2));
         } else {
             if (score === row.score) { row.status = 'correct'; row.statusCode = 1; }
             else if (score === 0) { row.status = 'incorrect'; row.statusCode = 0; }
