@@ -924,14 +924,17 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
             justify-content: space-between;
             align-items: center;
             box-shadow: 0 -3px 12px rgba(0,0,0,0.15);
+            gap: 16px;
         }
         .bot-nav-wrap {
             display: flex;
             align-items: center;
             gap: 6px;
+            flex: 1 1 auto;
+            min-width: 0;
         }
         .btn-bot-nav {
-            padding: 4px 9px;
+            padding: 4px 10px;
             background: #1e293b;
             color: #f8fafc;
             border: 1px solid #334155;
@@ -941,19 +944,24 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
             cursor: pointer;
             transition: 0.12s;
             user-select: none;
+            flex-shrink: 0;
         }
         .btn-bot-nav:hover { background: #2563eb; border-color: #2563eb; }
         .bot-scrubber {
             display: flex;
             gap: 4px;
             align-items: center;
-            max-width: 440px;
             overflow-x: auto;
-            scrollbar-width: none;
+            scrollbar-width: thin;
+            scrollbar-color: #334155 transparent;
+            padding: 2px 0;
+            flex: 1 1 auto;
+            min-width: 0;
         }
-        .bot-scrubber::-webkit-scrollbar { display: none; }
+        .bot-scrubber::-webkit-scrollbar { height: 3px; }
+        .bot-scrubber::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
         .bot-scrub-chip {
-            padding: 2px 7px;
+            padding: 3px 8px;
             border-radius: 4px;
             background: #1e293b;
             color: #94a3b8;
@@ -963,9 +971,18 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
             cursor: pointer;
             transition: 0.12s;
             white-space: nowrap;
+            flex-shrink: 0;
         }
         .bot-scrub-chip:hover { background: #334155; color: #fff; }
         .bot-scrub-chip.active { background: #2563eb; color: #fff; border-color: #3b82f6; }
+
+        .bot-shortcut-wrap {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+            margin-left: auto;
+        }
     </style>
 </head>
 <body>
@@ -1049,13 +1066,14 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
     <!-- 하단 듀얼 내비게이션 & 단축키 가이드 바 -->
     <div id="bottomShortcutBar">
         <div class="bot-nav-wrap">
-            <button type="button" class="btn-bot-nav" id="btnPrevQ" onclick="navigateFilter(-1)">‹ 이전</button>
+            <button type="button" class="btn-bot-nav" id="btnPrevQ" onclick="navigateFilter(-1)" title="이전 문항 (단축키 [ 또는 PageUp)">‹ 이전</button>
             <div class="bot-scrubber" id="botScrubber"></div>
-            <button type="button" class="btn-bot-nav" id="btnNextQ" onclick="navigateFilter(1)">다음 ›</button>
+            <button type="button" class="btn-bot-nav" id="btnNextQ" onclick="navigateFilter(1)" title="다음 문항 (단축키 ] 또는 PageDown)">다음 ›</button>
         </div>
-        <div id="shortcutKeyText"></div>
-        <div style="color: #94a3b8; font-size: 11.5px; white-space:nowrap;">
-            Shift+방향키: 크롭 확장 | [ / ] 문항 이동
+        <div class="bot-shortcut-wrap">
+            <div id="shortcutKeyText"></div>
+            <span style="color: #475569; font-size: 11px;">|</span>
+            <span style="color: #94a3b8; font-size: 11.5px; white-space:nowrap;">[ / ] 문항 이동</span>
         </div>
     </div>
 
@@ -1563,8 +1581,13 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
                 </div>
                 ${partialBadgeHtml}
             </div>
-            <div style="font-size:0.82rem; color:#64748b; font-weight:700;">
-                응시 인원: ${displayRows.length}명
+            <div style="display:flex; align-items:center; gap:10px;">
+                <span style="font-size:0.78rem; color:#475569; background:#f1f5f9; padding:2px 8px; border-radius:5px; border:1px solid #cbd5e1; font-weight:600;" title="손글씨가 칸을 벗어났을 때 크롭 영역을 확장합니다">
+                    🔍 Shift+방향키: 크롭 확장
+                </span>
+                <span style="font-size:0.82rem; color:#64748b; font-weight:700;">
+                    응시 인원: ${displayRows.length}명
+                </span>
             </div>
             ${criteriaHtml}
         `;
