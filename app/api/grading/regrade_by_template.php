@@ -8,6 +8,7 @@
 require_once dirname(__DIR__, 2) . '/config/db.php';
 require_once APP_ROOT . '/includes/common/response.php';
 require_once APP_ROOT . '/includes/common/auth.php';
+require_once APP_ROOT . '/includes/grading/objective.php';
 
 $userId = requireTeacherAuth();
 
@@ -175,9 +176,13 @@ try {
                             $normalizedStudentAns = preg_replace('/[\s\/\.]+/u', ',', $rawStudentAns);
                             $extArr   = array_values(array_filter(array_map('trim', explode(',', $normalizedStudentAns)), 'strlen'));
                             $modelArr = array_values(array_filter(array_map('trim', explode(',', $newAnswer)), 'strlen'));
-                            sort($extArr);
-                            sort($modelArr);
-                            $isMatch = (!empty($modelArr) && $extArr === $modelArr);
+
+                            // [동일 보기 이체 표기 정규화] (ㄱ), ㄱ, ㉠ / (가), 가, ㉮ / (1), ①, 1 / ○, O / ✕, X
+                            $canonicalExt   = array_map('canonicalizeAnswerToken', $extArr);
+                            $canonicalModel = array_map('canonicalizeAnswerToken', $modelArr);
+                            sort($canonicalExt);
+                            sort($canonicalModel);
+                            $isMatch = (!empty($canonicalModel) && $canonicalExt === $canonicalModel);
                             $item['status']       = $isMatch ? 1 : 0;
                             $item['currentScore'] = $isMatch ? $newScore : 0.0;
                             $totalRegradedCount++;

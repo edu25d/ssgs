@@ -14,6 +14,88 @@ function getGeminiApiKey(): string {
     return $key;
 }
 
+if (!function_exists('canonicalizeAnswerToken')) {
+    /**
+     * 학생 답안 및 정답 토큰 정규화 함수
+     * 동일 보기에 대한 다양한 표기 변형을 표준형으로 일원화
+     * 예: (ㄱ), ㄱ, ㉠ -> ㄱ
+     *     (가), 가, ㉮ -> 가
+     *     (1), ①, 1, 1번 -> 1
+     *     O, o, 0, ○, 동그라미 -> ○
+     *     X, x, ✕, ✗ -> ✕
+     */
+    function canonicalizeAnswerToken(string $str): string {
+        $str = trim($str);
+        if ($str === '') return '';
+
+        // 1. 앞뒤 괄호 제거: (ㄱ) -> ㄱ, (가) -> 가, (1) -> 1, [1] -> 1
+        if (preg_match('/^[\(\[\{（【\s]*(.*?)[\)\]\}）】\s]*$/u', $str, $m)) {
+            $inner = trim($m[1]);
+            if ($inner !== '') {
+                $str = $inner;
+            }
+        }
+
+        // 2. 뒤에 '번' 접미사 제거: 1번 -> 1
+        $str = preg_replace('/^(\d+)\s*번$/u', '$1', $str);
+
+        // 3. 원문자 숫자 (①~⑳ -> 1~20)
+        $circleNumMap = [
+            '①'=>'1', '②'=>'2', '③'=>'3', '④'=>'4', '⑤'=>'5',
+            '⑥'=>'6', '⑦'=>'7', '⑧'=>'8', '⑨'=>'9', '⑩'=>'10',
+            '⑪'=>'11', '⑫'=>'12', '⑬'=>'13', '⑭'=>'14', '⑮'=>'15',
+            '⑯'=>'16', '⑰'=>'17', '⑱'=>'18', '⑲'=>'19', '⑳'=>'20'
+        ];
+        if (isset($circleNumMap[$str])) {
+            return $circleNumMap[$str];
+        }
+
+        // 4. 한글 자음 원문자 (㉠~㉭ -> ㄱ~ㅎ)
+        $circleJaMap = [
+            '㉠'=>'ㄱ', '㉡'=>'ㄴ', '㉢'=>'ㄷ', '㉣'=>'ㄹ', '㉤'=>'ㅁ',
+            '㉥'=>'ㅂ', '㉦'=>'ㅅ', '㉧'=>'ㅇ', '㉨'=>'ㅈ', '㉩'=>'ㅊ',
+            '㉪'=>'ㅋ', '㉫'=>'ㅌ', '㉬'=>'ㅍ', '㉭'=>'ㅎ'
+        ];
+        if (isset($circleJaMap[$str])) {
+            return $circleJaMap[$str];
+        }
+
+        // 5. 한글 음절 원문자 (㉮~㉻ -> 가~하)
+        $circleSylMap = [
+            '㉮'=>'가', '㉯'=>'나', '㉰'=>'다', '㉱'=>'라', '㉲'=>'마',
+            '㉳'=>'바', '㉴'=>'사', '㉵'=>'아', '㉶'=>'자', '㉷'=>'차',
+            '㉸'=>'카', '㉹'=>'타', '㉺'=>'파', '㉻'=>'하'
+        ];
+        if (isset($circleSylMap[$str])) {
+            return $circleSylMap[$str];
+        }
+
+        // 6. OX 기호 정규화
+        if (preg_match('/^[○O0o]$/u', $str) || $str === '동그라미' || $str === '참' || $str === '맞음') {
+            return '○';
+        }
+        if (preg_match('/^[✕Xx✗]$/u', $str) || $str === '거짓' || $str === '틀림') {
+            return '✕';
+        }
+
+        // 7. 알파벳 원문자 및 대소문자 통일 (ⓐ~ⓩ, Ⓐ~Ⓩ -> A~Z)
+        $circleAlphaMap = [
+            'ⓐ'=>'A', 'ⓑ'=>'B', 'ⓒ'=>'C', 'ⓓ'=>'D', 'ⓔ'=>'E',
+            'ⓕ'=>'F', 'ⓖ'=>'G', 'ⓗ'=>'H', 'ⓘ'=>'I', 'ⓙ'=>'J',
+            'Ⓐ'=>'A', 'Ⓑ'=>'B', 'Ⓒ'=>'C', 'Ⓓ'=>'D', 'Ⓔ'=>'E'
+        ];
+        if (isset($circleAlphaMap[$str])) {
+            return $circleAlphaMap[$str];
+        }
+
+        if (preg_match('/^[a-zA-Z]$/', $str)) {
+            return strtoupper($str);
+        }
+
+        return $str;
+    }
+}
+
 function gradeObjectiveItems(array $items): array {
     if (empty($items)) {
         return ['items' => [], 'debug' => []];
@@ -407,15 +489,18 @@ function gradeObjectiveItems(array $items): array {
             $extArr   = array_values(array_filter(array_map('trim', explode(',', $normalizedStudentAns)), 'strlen'));
             $modelArr = array_values(array_filter(array_map('trim', explode(',', $correctAnswerStr)), 'strlen'));
 
+            // [동일 보기 이체 표기 정규화] (ㄱ), ㄱ, ㉠ / (가), 가, ㉮ / (1), ①, 1 / ○, O, 동그라미 / ✕, X 등을 표준형으로 정규화
+            $canonicalExt   = array_map('canonicalizeAnswerToken', $extArr);
+            $canonicalModel = array_map('canonicalizeAnswerToken', $modelArr);
+
             if ($itemType === 'composite') {
                 // ===== 복합 다답형 All-or-Nothing 판정 =====
                 // 정답 배열과 학생 답안 배열을 순서대로 비교 (쉼표 순서 의미 있음)
-                if (!empty($modelArr) && count($extArr) === count($modelArr)) {
+                if (!empty($canonicalModel) && count($canonicalExt) === count($canonicalModel)) {
                     $allMatch = true;
-                    foreach ($modelArr as $mi => $mAns) {
-                        $sAns = mb_strtolower(trim($extArr[$mi] ?? ''), 'UTF-8');
-                        $mAnsLc = mb_strtolower(trim($mAns), 'UTF-8');
-                        if ($sAns !== $mAnsLc) {
+                    foreach ($canonicalModel as $mi => $mAnsC) {
+                        $sAnsC = $canonicalExt[$mi] ?? '';
+                        if ($sAnsC !== $mAnsC) {
                             $allMatch = false;
                             break;
                         }
@@ -423,10 +508,10 @@ function gradeObjectiveItems(array $items): array {
                     $isCorrect = $allMatch; // 하나라도 불일치 시 false → 0점
                 }
             } else {
-                // 기존 일반 채점 (순서 무관 정답 판정)
-                sort($extArr);
-                sort($modelArr);
-                if (!empty($modelArr) && $extArr === $modelArr) {
+                // 기존 일반 채점 (순서 무관 정답 판정 + 이체 표기 동등성 보장)
+                sort($canonicalExt);
+                sort($canonicalModel);
+                if (!empty($canonicalModel) && $canonicalExt === $canonicalModel) {
                     $isCorrect = true;
                 }
             }

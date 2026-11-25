@@ -252,36 +252,76 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
         .expand-left { top: 0; bottom: 0; left: -5px; width: 10px; }
         .expand-right { top: 0; bottom: 0; right: -5px; width: 10px; }
 
-        .sub-roi-selector {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            margin-bottom: 6px;
-            padding: 4px 10px;
-            background: #f1f5f9;
-            border-radius: 8px;
-            border: 1px solid #e2e8f0;
+        /* 소문항 통합 그리드 및 서브 카드 디자인 */
+        .sub-items-grid {
+            display: flex;
+            gap: 14px;
+            align-items: stretch;
+            flex-wrap: wrap;
+            width: 100%;
         }
-        .sub-roi-badge {
-            padding: 3px 9px;
-            font-size: 0.78rem;
-            font-weight: 700;
-            border-radius: 6px;
-            border: 1.5px solid #cbd5e1;
+        .sub-item-card {
+            flex: 1 1 290px;
+            min-width: 250px;
             background: #ffffff;
-            color: #475569;
+            border: 1.5px solid #cbd5e1;
+            border-radius: 8px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
             cursor: pointer;
-            transition: all 0.15s ease;
+            transition: all 0.18s ease;
         }
-        .sub-roi-badge:hover {
+        .sub-item-card:hover {
             border-color: #94a3b8;
             background: #f8fafc;
         }
-        .sub-roi-badge.active {
+        .sub-item-card.active {
+            border: 2.5px solid #2563eb !important;
+            background: #f0f7ff !important;
+            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.22) !important;
+        }
+        .sub-item-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .sub-item-title-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.95rem;
+            font-weight: 800;
+            color: #1e293b;
+        }
+        .sub-item-card.active .sub-item-title-pill {
+            color: #1d4ed8;
+        }
+        .sub-item-focus-badge {
+            display: none;
+            font-size: 0.72rem;
+            padding: 2px 6px;
+            border-radius: 4px;
             background: #2563eb;
-            color: #ffffff;
-            border-color: #2563eb;
-            box-shadow: 0 2px 6px rgba(37, 99, 235, 0.35);
+            color: white;
+            font-weight: 800;
+        }
+        .sub-item-card.active .sub-item-focus-badge {
+            display: inline-block;
+        }
+        .box-score-summary {
+            font-size: 0.92rem;
+            margin-top: 6px;
+            padding: 4px 8px;
+            background: #f1f5f9;
+            border-radius: 6px;
+            color: #334155;
+            line-height: 1.4;
         }
         
         .answer-info-block { display: flex; flex-direction: row; justify-content: flex-start; align-items: center; gap: 15px; margin-top: 10px; padding-left: 5px; }
@@ -457,8 +497,7 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
         sessionStorage.setItem(storageKey, JSON.stringify({
             viewMode: viewMode,
             showSubjectiveOnly: showSubjectiveOnly,
-            selectedFilterKey: selectedFilterKey,
-            selectedSubFilter: selectedSubFilter
+            selectedFilterKey: selectedFilterKey
         }));
     }
 
@@ -480,9 +519,24 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
         const studentLabel = studentNameLookup[studentHash] || dbRow.student_name || ('학생 ' + (dbRow.student_id || dbRow.id)); 
 
         rawList.forEach(item => {
-            const rawId = item.item_id || item.id || 0;
-            const subId = item.sub_id || null;
-            const displayNum = (item.display_num || (subId ? `${rawId}-${subId}` : `${rawId}`)).toString();
+            const rawIdStr = String(item.item_id || item.id || '0');
+            const subIdVal = (item.sub_id !== undefined && item.sub_id !== null && item.sub_id !== '') ? String(item.sub_id) : '';
+            const displayNum = (item.display_num || (subIdVal !== '' ? `${rawIdStr}-${subIdVal}` : rawIdStr)).toString();
+            
+            // 대문항 번호 parentId 추출 (예: "10-1" -> "10", "10" -> "10", "17-2" -> "17")
+            let parentId = '';
+            let resolvedSubId = subIdVal;
+            if (displayNum.includes('-')) {
+                const parts = displayNum.split('-');
+                parentId = parts[0].trim();
+                if (!resolvedSubId && parts[1]) resolvedSubId = parts[1].trim();
+            } else if (rawIdStr.includes('-')) {
+                const parts = rawIdStr.split('-');
+                parentId = parts[0].trim();
+                if (!resolvedSubId && parts[1]) resolvedSubId = parts[1].trim();
+            } else {
+                parentId = rawIdStr.trim();
+            }
             const itemId = displayNum;
             const maxScore = parseFloat(item.score || 0);
             
@@ -516,10 +570,11 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
                 student_id: dbRow.student_id,
                 studentName: studentLabel,
                 item_id: itemId,
-                raw_id: rawId,
-                sub_id: subId,
+                raw_id: parentId,
+                parentId: parentId,
+                sub_id: resolvedSubId || null,
                 page: parseInt(item.page || 1, 10),
-                type: item.type || 'objective',
+                type: (resolvedSubId ? 'sub_item' : (item.type || 'objective')),
                 score: maxScore,
                 currentScore: currentScore,
                 statusCode: statusCode,
@@ -569,7 +624,6 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
                     items.forEach(item => {
                         const idx = rawRowsData.findIndex(r => r.db_id === item.db_id && r.item_id === item.item_id);
                         if (idx >= 0) {
-                            // 상태나 점수 또는 인식 텍스트가 바뀐 경우만 업데이트
                             const prev = rawRowsData[idx];
                             if (prev.statusCode !== item.statusCode || prev.currentScore !== item.currentScore || prev.rawText !== item.rawText) {
                                 rawRowsData[idx] = item;
@@ -584,11 +638,15 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
 
                 if (hasNewData) {
                     if (isPartialMode) return;
-                    const focusedTarget = displayRows[currentRowIndex];
+                    const prevBox = displayRows[currentRowIndex];
+                    const prevSubIdx = prevBox ? prevBox.activeSubIndex : 0;
                     applyFiltersAndRefresh(false);
-                    if (focusedTarget) {
-                        const restoredIdx = displayRows.findIndex(r => r.db_id === focusedTarget.db_id && r.item_id === focusedTarget.item_id);
-                        if (restoredIdx >= 0) currentRowIndex = restoredIdx;
+                    if (prevBox) {
+                        const restoredBoxIdx = displayRows.findIndex(b => b.db_id === prevBox.db_id && b.parentId === prevBox.parentId);
+                        if (restoredBoxIdx >= 0) {
+                            currentRowIndex = restoredBoxIdx;
+                            displayRows[restoredBoxIdx].activeSubIndex = prevSubIdx;
+                        }
                     }
                     renderTable();
                 }
@@ -684,7 +742,7 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
         filteredData = rawRowsData.filter(r => {
             if (showSubjectiveOnly) {
                 const t = r.type || 'objective';
-                if (t !== 'subjective' && t !== 'short_answer' && t !== 'essay' && t !== 'matching_line') return false;
+                if (t !== 'subjective' && t !== 'short_answer' && t !== 'essay') return false;
             }
             return true;
         });
@@ -700,9 +758,65 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
         refreshTabsAndView(true);
     }
 
+    function updateBoxSummary(box) {
+        let totalMax = 0;
+        let totalCur = 0;
+        let allCorrect = true;
+        let anyIncorrect = false;
+        let anyPending = false;
+        let anyPartial = false;
+        let hasAppeal = false;
+        let appealReason = '';
+
+        box.subItems.forEach(sub => {
+            totalMax += sub.score;
+            totalCur += sub.currentScore;
+            if (sub.statusCode === 1) {
+                // 정답
+            } else if (sub.statusCode === 0) {
+                allCorrect = false;
+                anyIncorrect = true;
+            } else if (sub.statusCode === 2) {
+                allCorrect = false;
+                anyPartial = true;
+            } else {
+                allCorrect = false;
+                anyPending = true;
+            }
+            if (sub.appeal) {
+                hasAppeal = true;
+                if (!appealReason) appealReason = sub.appeal_reason;
+            }
+        });
+
+        box.totalMaxScore = Math.round(totalMax * 10) / 10;
+        box.totalCurrentScore = Math.round(totalCur * 10) / 10;
+        box.hasAppeal = hasAppeal;
+        box.appealReason = appealReason || '확인 요청';
+
+        if (anyPending) {
+            box.status = 'pending';
+        } else if (allCorrect) {
+            box.status = 'correct';
+        } else if (totalCur > 0 && totalCur < totalMax) {
+            box.status = 'partial';
+        } else if (totalCur === 0) {
+            box.status = 'incorrect';
+        } else {
+            box.status = 'partial';
+        }
+    }
+
     function refreshTabsAndView(resetFocus = false) {
         const container = document.getElementById('subTabsContainer');
         container.innerHTML = '';
+        
+        // 서브 칩 컨테이너는 이제 하나의 문제 박스 안에 소문항이 함께 통합되므로 숨김
+        const subChipsContainer = document.getElementById('subChipsContainer');
+        if (subChipsContainer) {
+            subChipsContainer.style.display = 'none';
+            subChipsContainer.innerHTML = '';
+        }
         
         if (filteredData.length === 0) {
             displayRows = [];
@@ -713,7 +827,7 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
         if (viewMode === 'question') {
             const parentMap = new Map();
             filteredData.forEach(r => {
-                const pId = String(r.raw_id || (r.item_id ? r.item_id.split('-')[0] : '1'));
+                const pId = String(r.parentId || '1');
                 if (!parentMap.has(pId)) {
                     parentMap.set(pId, {
                         parentId: pId,
@@ -756,7 +870,6 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
                 btn.innerHTML = `${q.parentId}번 <span class="type-badge">${badgeLabel}</span>`;
                 btn.onclick = () => { 
                     selectedFilterKey = q.parentId; 
-                    selectedSubFilter = 'all';
                     saveState(); 
                     refreshTabsAndView(true); 
                 };
@@ -764,32 +877,6 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
             });
 
             const currentQ = questions.find(q => q.parentId === selectedFilterKey);
-
-            // 소문항 하위 서브 칩
-            const subChipsContainer = document.getElementById('subChipsContainer');
-            if (currentQ && currentQ.subItems.size > 1) {
-                subChipsContainer.style.display = 'flex';
-                subChipsContainer.innerHTML = '<span style="font-size:0.8rem; font-weight:800; color:#64748b; margin-right:4px;">소문항:</span>';
-                
-                const allChip = document.createElement('button');
-                allChip.type = 'button';
-                allChip.className = `sub-chip ${selectedSubFilter === 'all' ? 'active' : ''}`;
-                allChip.innerText = '🔍 전체 나란히 보기';
-                allChip.onclick = () => { selectedSubFilter = 'all'; saveState(); refreshTabsAndView(true); };
-                subChipsContainer.appendChild(allChip);
-
-                Array.from(currentQ.subItems).sort((a,b) => a.localeCompare(b, undefined, {numeric:true})).forEach(subKey => {
-                    const chip = document.createElement('button');
-                    chip.type = 'button';
-                    chip.className = `sub-chip ${selectedSubFilter === subKey ? 'active' : ''}`;
-                    chip.innerText = `${subKey}번만`;
-                    chip.onclick = () => { selectedSubFilter = subKey; saveState(); refreshTabsAndView(true); };
-                    subChipsContainer.appendChild(chip);
-                });
-            } else {
-                subChipsContainer.style.display = 'none';
-                subChipsContainer.innerHTML = '';
-            }
 
             // 루브릭 안내 바
             const rubricContainer = document.getElementById('rubricContainer');
@@ -804,30 +891,37 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
                 rubricContainer.innerHTML = '';
             }
 
+            // 문제 박스 단위 그룹핑 (학생별로 1개 박스)
             if (selectedFilterKey) {
-                if (selectedSubFilter === 'all') {
-                    displayRows = filteredData.filter(r => {
-                        const pId = String(r.raw_id || (r.item_id ? r.item_id.split('-')[0] : '1'));
-                        return pId === selectedFilterKey;
-                    });
-                    displayRows.sort((a,b) => {
-                        if (a.db_id !== b.db_id) return a.db_id - b.db_id;
-                        return String(a.item_id).localeCompare(String(b.item_id), undefined, {numeric: true});
-                    });
-                } else {
-                    displayRows = filteredData.filter(r => r.item_id === selectedSubFilter);
-                }
+                const studentGroupMap = new Map();
+                const matchingItems = filteredData.filter(r => String(r.parentId) === String(selectedFilterKey));
+                
+                matchingItems.forEach(item => {
+                    if (!studentGroupMap.has(item.db_id)) {
+                        studentGroupMap.set(item.db_id, {
+                            db_id: item.db_id,
+                            student_id: item.student_id,
+                            studentName: item.studentName,
+                            parentId: selectedFilterKey,
+                            subItems: [],
+                            activeSubIndex: 0
+                        });
+                    }
+                    studentGroupMap.get(item.db_id).subItems.push(item);
+                });
+
+                displayRows = Array.from(studentGroupMap.values());
+                displayRows.forEach(box => {
+                    box.subItems.sort((a,b) => String(a.item_id).localeCompare(String(b.item_id), undefined, {numeric: true}));
+                    updateBoxSummary(box);
+                });
+                displayRows.sort((a,b) => a.db_id - b.db_id);
             } else {
                 displayRows = [];
             }
 
         } else {
-            // 학생별 보기일 때는 루브릭/서브칩 숨김
-            const subChipsContainer = document.getElementById('subChipsContainer');
-            if (subChipsContainer) {
-                subChipsContainer.style.display = 'none';
-                subChipsContainer.innerHTML = '';
-            }
+            // 학생별 보기
             const rubricContainer = document.getElementById('rubricContainer');
             if (rubricContainer) {
                 rubricContainer.innerHTML = '';
@@ -851,14 +945,40 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
                 container.appendChild(btn);
             });
 
-            displayRows = selectedFilterKey ? filteredData.filter(r => r.db_id === selectedFilterKey) : [];
-            displayRows.sort((a,b) => String(a.item_id).localeCompare(String(b.item_id), undefined, { numeric: true }));
+            if (selectedFilterKey) {
+                const parentGroupMap = new Map();
+                const studentItems = filteredData.filter(r => r.db_id === selectedFilterKey);
+
+                studentItems.forEach(item => {
+                    const pId = String(item.parentId);
+                    if (!parentGroupMap.has(pId)) {
+                        parentGroupMap.set(pId, {
+                            db_id: item.db_id,
+                            student_id: item.student_id,
+                            studentName: item.studentName,
+                            parentId: pId,
+                            subItems: [],
+                            activeSubIndex: 0
+                        });
+                    }
+                    parentGroupMap.get(pId).subItems.push(item);
+                });
+
+                displayRows = Array.from(parentGroupMap.values());
+                displayRows.forEach(box => {
+                    box.subItems.sort((a,b) => String(a.item_id).localeCompare(String(b.item_id), undefined, {numeric: true}));
+                    updateBoxSummary(box);
+                });
+                displayRows.sort((a,b) => String(a.parentId).localeCompare(String(b.parentId), undefined, { numeric: true }));
+            } else {
+                displayRows = [];
+            }
         }
 
         renderTable();
         
-        if (resetFocus && displayRows.length > 0) setFocus(0);
-        else if (displayRows.length === 0) setFocus(-1);
+        if (resetFocus && displayRows.length > 0) setFocus(0, 0);
+        else if (displayRows.length === 0) setFocus(-1, 0);
     }
 
     function renderTable() {
@@ -871,138 +991,170 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
             return;
         }
 
-        displayRows.forEach((row, index) => {
+        displayRows.forEach((box, index) => {
             const tr = document.createElement('tr');
             tr.id = `row-${index}`;
-            tr.className = row.status; 
+            tr.className = box.status; 
             if (index === currentRowIndex) tr.classList.add('focused');
             if (isPartialMode && index === currentRowIndex) tr.classList.add('partial-mode');
 
-            const pageBadge = row.page && row.page > 1 ? `<span style="font-size:0.75em; background:#e2e8f0; color:#475569; padding:1px 5px; border-radius:4px; margin-left:4px;">${row.page}쪽</span>` : '';
-            const subLabel = row.sub_id ? `<span style="display:inline-block; font-size:0.82em; background:#ede9fe; color:#6d28d9; padding:2px 6px; border-radius:4px; margin-left:4px;">${row.item_id}</span>` : '';
-            const firstColText = (viewMode === 'question') 
-                ? `<div>${row.studentName} ${subLabel} ${pageBadge}</div>` 
-                : `<div>${row.item_id}번 ${pageBadge}</div>`;
-            const isSubjective = (row.type === 'subjective');
-            const typeLabel = isSubjective
-                ? '<span style="color:#b45309; font-weight:700;">[주관식]</span>'
-                : (row.type === 'sub_item'
-                    ? '<span style="color:#7c3aed; font-weight:700;">[소문항]</span>'
-                    : (row.type === 'short_answer'
-                        ? '<span style="color:#0d6efd; font-weight:700;">[단답형]</span>'
-                        : (row.type === 'matching_line'
-                            ? '<span style="color:#0d6efd; font-weight:700;">[선잇기]</span>'
-                            : '<span style="color:#0d6efd; font-weight:700;">[객관식]</span>')));
+            const hasMultipleSub = box.subItems.length > 1;
+            const activeSub = box.subItems[box.activeSubIndex] || box.subItems[0] || {};
 
-            let statusBadge = '';
-            if (row.status === 'correct') {
-                statusBadge = `<span class="badge-status badge-correct">✅ 정답 (${row.currentScore}점)</span>`;
-            } else if (row.status === 'incorrect') {
-                statusBadge = `<span class="badge-status badge-incorrect">❌ 오답 (0점)</span>`;
-            } else if (row.status === 'partial') {
-                statusBadge = `<span class="badge-status badge-partial">△ 부분점수 (${row.currentScore}점)</span>`;
+            // 좌측 열: 학생 정보 및 대문항 총점/상태
+            let leftHeaderTitle = '';
+            if (viewMode === 'question') {
+                const subBadge = hasMultipleSub ? `<span style="font-size:0.8em; color:#7c3aed; font-weight:700;">(소문항 ${box.subItems.length}개)</span>` : '';
+                leftHeaderTitle = `<div>${box.studentName} ${subBadge}</div>`;
             } else {
-                if (row.isAiPending) {
-                    statusBadge = `<span class="badge-status badge-pending" style="background:#eff6ff; color:#2563eb; border:1px solid #bfdbfe;">⚡ AI 판독 진행 중</span>`;
-                } else {
-                    statusBadge = `<span class="badge-status badge-pending">⏳ 검수 대기</span>`;
-                }
+                const subBadge = hasMultipleSub ? `<span style="font-size:0.8em; color:#7c3aed; font-weight:700;">(소문항 ${box.subItems.length}개)</span>` : '';
+                leftHeaderTitle = `<div>${box.parentId}번 ${subBadge}</div>`;
+            }
+
+            let boxStatusBadge = '';
+            if (box.status === 'correct') {
+                boxStatusBadge = `<span class="badge-status badge-correct">✅ 정답 (${box.totalCurrentScore}점)</span>`;
+            } else if (box.status === 'incorrect') {
+                boxStatusBadge = `<span class="badge-status badge-incorrect">❌ 오답 (0점)</span>`;
+            } else if (box.status === 'partial') {
+                boxStatusBadge = `<span class="badge-status badge-partial">△ 부분점수 (${box.totalCurrentScore}점)</span>`;
+            } else {
+                boxStatusBadge = `<span class="badge-status badge-pending">⏳ 검수 대기</span>`;
             }
 
             let appealHtml = '';
-            if (row.appeal) {
-                appealHtml = `<div style="margin-top:6px;"><span class="badge-appeal">🙋 확인 요청: "${row.appeal_reason}"</span></div>`;
+            if (box.hasAppeal) {
+                appealHtml = `<div style="margin-top:6px;"><span class="badge-appeal">🙋 확인 요청: "${box.appealReason}"</span></div>`;
             }
 
-            let extractedAnswerHtml = '';
-            if (row.type === 'matching_line') {
-                const pairsText = row.rawText || '선잇기 미인식';
-                extractedAnswerHtml = `<div class="extracted-answer" style="margin-top:6px;">
-                    <span style="display:inline-block; padding:3px 8px; border-radius:4px; background:#eff6ff; color:#1d4ed8; font-weight:700; font-size:0.85em; border:1px solid #bfdbfe;">
-                        📏 선잇기 인식: <b>${pairsText}</b>
-                    </span>
-                </div>`;
-            } else if (row.type !== 'subjective' && row.type !== 'essay') {
-                if (row.isAiPending) {
-                    extractedAnswerHtml = `<div class="extracted-answer"><span style="color:#2563eb; font-weight:700;">🤖 AI 판독 진행 중... ⏳</span></div>`;
+            // 중앙 열: 각 소문항의 크롭 영역 및 답안 카드를 나란히 렌더링
+            let subItemsCardsHtml = `<div class="sub-items-grid">`;
+            box.subItems.forEach((sub, subIdx) => {
+                const isSubActive = (index === currentRowIndex && box.activeSubIndex === subIdx);
+                
+                let subBadge = '';
+                if (sub.status === 'correct') {
+                    subBadge = `<span class="badge-status badge-correct">✅ 정답 (${sub.currentScore}점)</span>`;
+                } else if (sub.status === 'incorrect') {
+                    subBadge = `<span class="badge-status badge-incorrect">❌ 오답 (0점)</span>`;
+                } else if (sub.status === 'partial') {
+                    subBadge = `<span class="badge-status badge-partial">△ 부분 (${sub.currentScore}점)</span>`;
                 } else {
-                    const warningBadge = row.isUnread ? '<span class="badge-warning">⚠️ 미기재/검수필요</span> ' : '';
-                    extractedAnswerHtml = `<div class="extracted-answer">${warningBadge}인식된 답안: <b>${row.rawText === '' ? '미기재' : row.rawText}</b></div>`;
+                    if (sub.isAiPending) {
+                        subBadge = `<span class="badge-status badge-pending" style="background:#eff6ff; color:#2563eb; border:1px solid #bfdbfe;">⚡ AI 판독 중</span>`;
+                    } else {
+                        subBadge = `<span class="badge-status badge-pending">⏳ 대기</span>`;
+                    }
                 }
-            }
 
-            tr.onclick = (e) => {
-                if (e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT' && !e.target.classList.contains('expand-btn')) {
-                    setFocus(index);
+                let subAppealBadge = sub.appeal ? `<span class="badge-appeal" style="font-size:0.75rem;">🙋 ${sub.appeal_reason}</span>` : '';
+
+                let extractedAnswerHtml = '';
+                if (sub.type === 'matching_line') {
+                    const pairsText = sub.rawText || '선잇기 미인식';
+                    extractedAnswerHtml = `<div class="extracted-answer" style="margin-top:4px;">
+                        <span style="display:inline-block; padding:2px 6px; border-radius:4px; background:#eff6ff; color:#1d4ed8; font-weight:700; font-size:0.82em; border:1px solid #bfdbfe;">
+                            📏 선잇기: <b>${pairsText}</b>
+                        </span>
+                    </div>`;
+                } else if (sub.type !== 'subjective' && sub.type !== 'essay') {
+                    if (sub.isAiPending) {
+                        extractedAnswerHtml = `<div class="extracted-answer" style="margin-top:4px;"><span style="color:#2563eb; font-weight:700;">🤖 AI 판독 중...</span></div>`;
+                    } else {
+                        const warningBadge = sub.isUnread ? '<span class="badge-warning">⚠️</span> ' : '';
+                        extractedAnswerHtml = `<div class="extracted-answer" style="margin-top:4px;">${warningBadge}인식: <b>${sub.rawText === '' ? '미기재' : sub.rawText}</b></div>`;
+                    }
                 }
-            };
 
-            let compositeSelectorHtml = '';
-            const subAnsParts = (row.answer || '').split(/[,/]/).map(s => s.trim()).filter(Boolean);
-            if (subAnsParts.length > 1) {
-                const subCount = subAnsParts.length;
-                row.subCount = subCount;
-                if (row.activeSubIndex === undefined) row.activeSubIndex = 0;
+                const pageBadge = sub.page && sub.page > 1 ? `<span style="font-size:0.75em; background:#e2e8f0; color:#475569; padding:1px 5px; border-radius:4px; margin-left:4px;">${sub.page}쪽</span>` : '';
 
-                let btnHtml = '';
-                for (let si = 0; si < subCount; si++) {
-                    const isActive = ((row.activeSubIndex || 0) === si);
-                    btnHtml += `<button type="button" class="sub-roi-badge ${isActive ? 'active' : ''}" onclick="selectSubRoi(${index}, ${si}, event)" title="클릭 또는 Tab키로 선택">답안 [${si+1}]</button>`;
-                }
-                compositeSelectorHtml = `
-                    <div class="sub-roi-selector">
-                        <span style="font-size:0.78rem; font-weight:700; color:#475569;">확장 답안:</span>
-                        ${btnHtml}
-                        <span style="font-size:0.72rem; color:#94a3b8;">(Tab키 전환)</span>
+                subItemsCardsHtml += `
+                    <div class="sub-item-card ${isSubActive ? 'active' : ''}" onclick="selectSubItem(${index}, ${subIdx}, event)">
+                        <div class="sub-item-card-header">
+                            <div class="sub-item-title-pill">
+                                <span>${sub.item_id}번</span>
+                                ${pageBadge}
+                                <span style="font-size:0.8rem; color:#64748b; font-weight:normal;">(${sub.score}점)</span>
+                                <span class="sub-item-focus-badge">🎯 선택됨</span>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:4px;">
+                                ${subBadge}
+                                ${subAppealBadge}
+                            </div>
+                        </div>
+
+                        <div class="crop-container" style="align-self:center;">
+                            <div class="expand-btn expand-top" onclick="expandSubImage(${index}, ${subIdx}, 'top', event)" title="Shift+↑ 확장"></div>
+                            <div class="expand-btn expand-bottom" onclick="expandSubImage(${index}, ${subIdx}, 'bottom', event)" title="Shift+↓ 확장"></div>
+                            <div class="expand-btn expand-left" onclick="expandSubImage(${index}, ${subIdx}, 'left', event)" title="Shift+← 확장"></div>
+                            <div class="expand-btn expand-right" onclick="expandSubImage(${index}, ${subIdx}, 'right', event)" title="Shift+→ 확장"></div>
+                            <img src="${sub.crop_image_url}" class="crop-img" id="cropImg-${index}-${subIdx}" alt="${sub.item_id} 답안 크롭">
+                        </div>
+
+                        <div class="answer-info-block" style="flex-direction:column; align-items:flex-start; gap:4px; margin-top:8px; padding-left:0;">
+                            <div class="model-answer-badge" style="width:100%; box-sizing:border-box;">💡 모범 답안: <b>${sub.answer}</b></div>
+                            ${extractedAnswerHtml}
+                        </div>
+                    </div>
+                `;
+            });
+            subItemsCardsHtml += `</div>`;
+
+            // 우측 열: 현재 포커스된 소문항에 대한 채점 버튼 및 입력창
+            let targetSubHeader = '';
+            if (hasMultipleSub) {
+                targetSubHeader = `
+                    <div style="font-size:0.92rem; font-weight:800; color:#2563eb; margin-bottom:8px; padding:4px 8px; background:#eff6ff; border-radius:6px; display:inline-block;">
+                        🎯 <b>[${activeSub.item_id}번]</b> 채점 중 
+                        <span style="font-size:0.75rem; color:#64748b; font-weight:normal;">(Tab 전환)</span>
                     </div>
                 `;
             }
-            
+
             let presetBtnsHtml = '';
-            if (row.score > 1) {
-                const step = row.score >= 5 ? 1.0 : (row.score >= 3 ? 1.0 : 0.5);
+            if (activeSub.score > 1) {
+                const step = activeSub.score >= 5 ? 1.0 : (activeSub.score >= 3 ? 1.0 : 0.5);
                 const presetList = [];
-                for (let ps = row.score - step; ps > 0; ps -= step) {
+                for (let ps = activeSub.score - step; ps > 0; ps -= step) {
                     presetList.push(Math.round(ps * 10) / 10);
                 }
                 presetBtnsHtml = `<div style="margin-top:6px; display:flex; gap:4px; justify-content:center; flex-wrap:wrap;">` + presetList.map(ps => 
-                    `<button type="button" class="preset-score-btn" onclick="savePartialScore(${index}, ${ps})" title="${ps}점 즉시 부여">${ps}점</button>`
+                    `<button type="button" class="preset-score-btn" onclick="savePartialScore(${index}, ${activeSub.score}, ${ps})" title="${ps}점 즉시 부여">${ps}점</button>`
                 ).join('') + `</div>`;
             }
 
+            tr.onclick = (e) => {
+                if (e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT' && !e.target.classList.contains('expand-btn') && !e.target.closest('.sub-item-card')) {
+                    setFocus(index, box.activeSubIndex || 0);
+                }
+            };
+
             tr.innerHTML = `
                 <td>
-                    <div style="font-size:1.15em; font-weight:800; color:#1e293b;">${firstColText}</div>
-                    <div style="margin-top:2px;">${typeLabel}</div>
-                    <div style="font-size: 0.85em; color: #64748b; font-weight: bold; margin-top: 4px;">배점: ${row.score}점</div>
-                    <div style="margin-top: 6px;">${statusBadge}</div>
+                    <div style="font-size:1.15em; font-weight:800; color:#1e293b;">${leftHeaderTitle}</div>
+                    <div class="box-score-summary">
+                        합계: <b>${box.totalCurrentScore}</b> / ${box.totalMaxScore}점
+                    </div>
+                    <div style="margin-top: 6px;">${boxStatusBadge}</div>
                     ${appealHtml}
                 </td>
                 <td>
-                    ${compositeSelectorHtml}
-                    <div class="crop-container">
-                        <div class="expand-btn expand-top" onclick="expandImage(${index}, 'top')" title="Shift+↑ 확장"></div>
-                        <div class="expand-btn expand-bottom" onclick="expandImage(${index}, 'bottom')" title="Shift+↓ 확장"></div>
-                        <div class="expand-btn expand-left" onclick="expandImage(${index}, 'left')" title="Shift+← 확장"></div>
-                        <div class="expand-btn expand-right" onclick="expandImage(${index}, 'right')" title="Shift+→ 확장"></div>
-                        <img src="${row.crop_image_url}" class="crop-img" id="cropImg-${index}" alt="답안 크롭">
-                    </div>
-                    <div class="answer-info-block">
-                        <div class="model-answer-badge">💡 모범 답안: <b>${row.answer}</b></div>
-                        ${extractedAnswerHtml}
-                    </div>
+                    ${subItemsCardsHtml}
                 </td>
                 <td>
-                    <button class="score-btn btn-o" onclick="markScore(${index}, ${row.score})"><b>[1]</b> O 정답 (${row.score})</button>
-                    <button class="score-btn btn-x" onclick="markScore(${index}, 0)"><b>[2]</b> X 오답 (0)</button>
-                    <button class="score-btn btn-p" onclick="enterPartialMode(${index})"><b>[3]</b> △ 부분점수</button>
+                    ${targetSubHeader}
+                    <div>
+                        <button class="score-btn btn-o" onclick="markSubScore(${index}, ${box.activeSubIndex}, ${activeSub.score}, 'correct')"><b>[1]</b> O 정답 (${activeSub.score})</button>
+                        <button class="score-btn btn-x" onclick="markSubScore(${index}, ${box.activeSubIndex}, 0, 'incorrect')"><b>[2]</b> X 오답 (0)</button>
+                        <button class="score-btn btn-p" onclick="enterPartialMode(${index}, ${box.activeSubIndex})"><b>[3]</b> △ 부분점수</button>
+                    </div>
                     
                     <div class="partial-input-wrapper">
                         <div>
                             <input type="number" class="partial-input" id="partialInput-${index}" 
-                                   min="0" max="${row.score}" step="0.5" 
-                                   value="${row.currentScore !== null ? row.currentScore : Math.floor(row.score/2)}">
-                            <span style="font-weight:bold;"> / ${row.score}점</span>
+                                   min="0" max="${activeSub.score}" step="0.5" 
+                                   value="${activeSub.currentScore !== null ? activeSub.currentScore : Math.floor(activeSub.score/2)}">
+                            <span style="font-weight:bold;"> / ${activeSub.score}점</span>
                         </div>
                         ${presetBtnsHtml}
                     </div>
@@ -1012,44 +1164,55 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
         });
     }
 
-    function selectSubRoi(index, subIdx, e) {
+    function selectSubItem(boxIndex, subIdx, e) {
         if (e) e.stopPropagation();
-        if (displayRows[index]) {
-            displayRows[index].activeSubIndex = subIdx;
-            renderTable();
+        currentRowIndex = boxIndex;
+        if (displayRows[boxIndex]) {
+            displayRows[boxIndex].activeSubIndex = subIdx;
         }
+        isPartialMode = false;
+        renderTable();
     }
 
-    function setFocus(index) {
-        if (index < 0 || index >= displayRows.length) {
+    function setFocus(boxIndex, subIdx = 0) {
+        if (boxIndex < 0 || boxIndex >= displayRows.length) {
             currentRowIndex = -1;
             renderTable();
             return;
         }
-        currentRowIndex = index;
+        currentRowIndex = boxIndex;
+        if (displayRows[boxIndex]) {
+            displayRows[boxIndex].activeSubIndex = subIdx;
+        }
         isPartialMode = false;
         renderTable();
-        const targetRow = document.getElementById(`row-${index}`);
+        const targetRow = document.getElementById(`row-${boxIndex}`);
         if (targetRow) targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
     document.addEventListener('keydown', (e) => {
         if (currentRowIndex < 0 || displayRows.length === 0) return;
-        const row = displayRows[currentRowIndex];
+        const box = displayRows[currentRowIndex];
+        const curSubIdx = box.activeSubIndex || 0;
+        const sub = box.subItems[curSubIdx];
+        if (!sub) return;
 
-        if (e.key === 'Tab' && row && row.subCount > 1) {
+        // Tab 키: 현재 문제 박스 안의 소문항 간 순환 이동
+        if (e.key === 'Tab') {
             e.preventDefault();
-            const count = row.subCount || 2;
-            row.activeSubIndex = ((row.activeSubIndex || 0) + 1) % count;
-            renderTable();
+            if (box.subItems.length > 1) {
+                box.activeSubIndex = (curSubIdx + 1) % box.subItems.length;
+                renderTable();
+            }
             return;
         }
 
+        // Shift + 방향키: 현재 포커스된 소문항 크롭 이미지 동적 확장
         if (e.shiftKey) {
-            if (e.key === 'ArrowUp') { e.preventDefault(); expandImage(currentRowIndex, 'top'); }
-            if (e.key === 'ArrowDown') { e.preventDefault(); expandImage(currentRowIndex, 'bottom'); }
-            if (e.key === 'ArrowLeft') { e.preventDefault(); expandImage(currentRowIndex, 'left'); }
-            if (e.key === 'ArrowRight') { e.preventDefault(); expandImage(currentRowIndex, 'right'); }
+            if (e.key === 'ArrowUp') { e.preventDefault(); expandSubImage(currentRowIndex, curSubIdx, 'top'); }
+            if (e.key === 'ArrowDown') { e.preventDefault(); expandSubImage(currentRowIndex, curSubIdx, 'bottom'); }
+            if (e.key === 'ArrowLeft') { e.preventDefault(); expandSubImage(currentRowIndex, curSubIdx, 'left'); }
+            if (e.key === 'ArrowRight') { e.preventDefault(); expandSubImage(currentRowIndex, curSubIdx, 'right'); }
             return;
         }
 
@@ -1057,10 +1220,10 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
             const inputEl = document.getElementById(`partialInput-${currentRowIndex}`);
             if (e.key === 'Enter') {
                 e.preventDefault();
-                savePartialScore(currentRowIndex, parseFloat(inputEl.value));
+                savePartialScore(currentRowIndex, sub.score, parseFloat(inputEl.value));
             } else if (e.key === 'ArrowUp') {
                 e.preventDefault();
-                inputEl.value = Math.min(row.score, (parseFloat(inputEl.value) || 0) + 0.5);
+                inputEl.value = Math.min(sub.score, (parseFloat(inputEl.value) || 0) + 0.5);
             } else if (e.key === 'ArrowDown') {
                 e.preventDefault();
                 inputEl.value = Math.max(0, (parseFloat(inputEl.value) || 0) - 0.5);
@@ -1073,87 +1236,144 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
 
         switch (e.key) {
             case '1':
-                e.preventDefault(); markScore(currentRowIndex, row.score, 'correct'); break;
+                e.preventDefault(); markSubScore(currentRowIndex, curSubIdx, sub.score, 'correct'); break;
             case '2':
-                e.preventDefault(); markScore(currentRowIndex, 0, 'incorrect'); break;
+                e.preventDefault(); markSubScore(currentRowIndex, curSubIdx, 0, 'incorrect'); break;
             case '3':
-                e.preventDefault(); enterPartialMode(currentRowIndex); break;
+                e.preventDefault(); enterPartialMode(currentRowIndex, curSubIdx); break;
             case 'ArrowDown':
-                e.preventDefault(); setFocus(currentRowIndex + 1); break;
+                e.preventDefault(); 
+                if (currentRowIndex + 1 < displayRows.length) {
+                    const nextBox = displayRows[currentRowIndex + 1];
+                    const targetSub = curSubIdx < nextBox.subItems.length ? curSubIdx : 0;
+                    setFocus(currentRowIndex + 1, targetSub);
+                }
+                break;
             case 'ArrowUp':
-                e.preventDefault(); setFocus(currentRowIndex - 1); break;
+                e.preventDefault(); 
+                if (currentRowIndex > 0) {
+                    const prevBox = displayRows[currentRowIndex - 1];
+                    const targetSub = curSubIdx < prevBox.subItems.length ? curSubIdx : 0;
+                    setFocus(currentRowIndex - 1, targetSub);
+                }
+                break;
             case 'Backspace':
                 e.preventDefault();
-                if (currentRowIndex > 0) {
-                    markScore(currentRowIndex - 1, 0, 'pending');
-                    setFocus(currentRowIndex - 1);
+                if (curSubIdx > 0) {
+                    // 같은 박스 안의 이전 소문항 취소
+                    markSubScore(currentRowIndex, curSubIdx - 1, 0, 'pending');
+                    box.activeSubIndex = curSubIdx - 1;
+                    renderTable();
+                } else if (currentRowIndex > 0) {
+                    // 이전 학생 박스의 마지막 소문항 취소
+                    const prevBox = displayRows[currentRowIndex - 1];
+                    const lastSubIdx = prevBox.subItems.length - 1;
+                    markSubScore(currentRowIndex - 1, lastSubIdx, 0, 'pending');
+                    setFocus(currentRowIndex - 1, lastSubIdx);
                 }
                 break;
         }
     });
 
-    function markScore(index, score, forceStatus = null) {
-        const row = displayRows[index];
-        row.currentScore = score;
-        row.appeal = false;
+    function markSubScore(boxIndex, subIdx, score, forceStatus = null) {
+        const box = displayRows[boxIndex];
+        if (!box || !box.subItems[subIdx]) return;
+        const sub = box.subItems[subIdx];
+
+        sub.currentScore = score;
+        sub.appeal = false;
         
         if (forceStatus) {
-            row.status = forceStatus;
-            row.statusCode = (forceStatus === 'correct') ? 1 : ((forceStatus === 'incorrect') ? 0 : ((forceStatus === 'pending') ? -1 : 2));
+            sub.status = forceStatus;
+            sub.statusCode = (forceStatus === 'correct') ? 1 : ((forceStatus === 'incorrect') ? 0 : ((forceStatus === 'pending') ? -1 : 2));
         } else {
-            if (score === row.score) { row.status = 'correct'; row.statusCode = 1; }
-            else if (score === 0) { row.status = 'incorrect'; row.statusCode = 0; }
-            else { row.status = 'partial'; row.statusCode = 2; }
+            if (score === sub.score) { sub.status = 'correct'; sub.statusCode = 1; }
+            else if (score === 0) { sub.status = 'incorrect'; sub.statusCode = 0; }
+            else { sub.status = 'partial'; sub.statusCode = 2; }
         }
 
-        if (index + 1 < displayRows.length) setFocus(index + 1);
-        else { setFocus(index); renderTable(); }
+        updateBoxSummary(box);
+
+        // rawRowsData 원본 동기화
+        const rawIdx = rawRowsData.findIndex(r => r.db_id === box.db_id && r.item_id === sub.item_id);
+        if (rawIdx >= 0) {
+            rawRowsData[rawIdx].currentScore = score;
+            rawRowsData[rawIdx].status = sub.status;
+            rawRowsData[rawIdx].statusCode = sub.statusCode;
+            rawRowsData[rawIdx].appeal = false;
+        }
+
+        // 채점 후 자동 다음 포커스 이동:
+        // 1) 소문항이 더 남아있으면 다음 소문항으로 포커스
+        // 2) 마지막 소문항이었으면 다음 학생의 첫 번째 소문항으로 이동!
+        if (subIdx + 1 < box.subItems.length) {
+            box.activeSubIndex = subIdx + 1;
+            renderTable();
+        } else {
+            box.activeSubIndex = 0;
+            if (boxIndex + 1 < displayRows.length) {
+                setFocus(boxIndex + 1, 0);
+            } else {
+                renderTable();
+            }
+        }
 
         fetch('/api/grading/save_score.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                db_id: row.db_id,
-                item_id: row.item_id,
+                db_id: box.db_id,
+                item_id: sub.item_id,
                 score: score,
-                status: row.statusCode
+                status: sub.statusCode
             })
         })
         .then(res => res.json())
         .then(res => { if (!res.success) console.error('점수 저장 실패:', res.error); });
     }
 
-    function enterPartialMode(index) {
-        if (currentRowIndex !== index) setFocus(index);
+    function enterPartialMode(boxIndex, subIdx) {
+        if (currentRowIndex !== boxIndex || displayRows[boxIndex].activeSubIndex !== subIdx) {
+            setFocus(boxIndex, subIdx);
+        }
         isPartialMode = true;
         renderTable();
         setTimeout(() => {
-            const inputEl = document.getElementById(`partialInput-${index}`);
+            const inputEl = document.getElementById(`partialInput-${boxIndex}`);
             if (inputEl) { inputEl.focus(); inputEl.select(); }
         }, 50);
     }
 
-    function savePartialScore(index, score) {
+    function savePartialScore(boxIndex, maxScore, score) {
         if (isNaN(score) || score < 0) score = 0;
-        markScore(index, score, 'partial');
+        const box = displayRows[boxIndex];
+        const subIdx = box ? box.activeSubIndex : 0;
+        markSubScore(boxIndex, subIdx, score, 'partial');
     }
 
-    function expandImage(index, direction) {
-        const row = displayRows[index];
-        const imgEl = document.getElementById(`cropImg-${index}`);
-        imgEl.style.opacity = '0.5';
-        const subIdx = row.activeSubIndex || 0;
+    function expandSubImage(boxIndex, subIdx, direction, e) {
+        if (e) e.stopPropagation();
+        const box = displayRows[boxIndex];
+        if (!box || !box.subItems[subIdx]) return;
+        const sub = box.subItems[subIdx];
 
-        fetch(`/api/grading/expand_crop.php?db_id=${row.db_id}&item_id=${encodeURIComponent(row.item_id)}&direction=${direction}&sub_index=${subIdx}`)
+        const imgEl = document.getElementById(`cropImg-${boxIndex}-${subIdx}`);
+        if (imgEl) imgEl.style.opacity = '0.5';
+
+        fetch(`/api/grading/expand_crop.php?db_id=${box.db_id}&item_id=${encodeURIComponent(sub.item_id)}&direction=${direction}`)
             .then(res => res.json())
             .then(data => {
-                imgEl.style.opacity = '1';
+                if (imgEl) imgEl.style.opacity = '1';
                 if (data.success && data.new_image_base64) {
-                    imgEl.src = data.new_image_base64;
-                    row.crop_image_url = data.new_image_base64;
-                } else alert('이미지를 확장할 수 없습니다: ' + (data.error || '원본 파일 없음'));
+                    if (imgEl) imgEl.src = data.new_image_base64;
+                    sub.crop_image_url = data.new_image_base64;
+                    const rawIdx = rawRowsData.findIndex(r => r.db_id === box.db_id && r.item_id === sub.item_id);
+                    if (rawIdx >= 0) rawRowsData[rawIdx].crop_image_url = data.new_image_base64;
+                } else {
+                    alert('이미지를 확장할 수 없습니다: ' + (data.error || '원본 파일 없음'));
+                }
             })
-            .catch(() => imgEl.style.opacity = '1');
+            .catch(() => { if (imgEl) imgEl.style.opacity = '1'; });
     }
 
     function toggleAnswerVisibility() {

@@ -428,13 +428,40 @@ if (!function_exists('normalizeAnswerEntry')) {
         }
 
         // 2. 소문항 분할 정답 감지
-        // 패턴 A: ㉠ 바다 ㉡ 육지 (Q8, Q14 등)
+        // 패턴 A: ㉠ 바다 ㉡ 육지 또는 ㉠ (다) ㉡ (가) (Q8, Q10, Q14 등)
         if (preg_match_all('/([㉠-㉭])\s*([^㉠-㉭,]+)/u', $rawAnswerTrim, $mSym) && count($mSym[1]) >= 2) {
             $subAnswers = [];
-            foreach ($mSym[2] as $sIdx => $val) {
-                $subAnswers[$sIdx + 1] = trim($val);
+            $allOx = true;
+            $allSym = true;
+            $allChoice = true;
+            $allShortCandidate = true;
+
+            foreach ($mSym[2] as $sIdx => $rawVal) {
+                $val = trim($rawVal);
+                if (preg_match('/^[○O0o✕Xx✗]$/u', $val)) {
+                    // ox
+                } else {
+                    $allOx = false;
+                }
+                if (!preg_match('/^[㉠-㉭①-⑳\d]$/u', $val)) {
+                    $allSym = false;
+                }
+                if (!preg_match('/^[\(\（][가-힣\w\d]+[\)\）]$/u', $val) && !preg_match('/^[㉠-㉭①-⑳\d]$/u', $val)) {
+                    $allChoice = false;
+                }
+                if (mb_strlen($val) > 20) {
+                    $allShortCandidate = false;
+                }
+                $subAnswers[$sIdx + 1] = $val;
             }
-            return buildSubItemEntry($qNum, $rawAnswerTrim, $score, $criteria, $subAnswers, 'subjective');
+
+            $isSubjectiveCriteria = (bool)preg_match('/쓰시오|서술|설명|까닭|이유/u', $criteria);
+
+            $subType = $allOx ? 'short_ox'
+                : ($allChoice || $allSym ? 'objective'
+                : ($allShortCandidate && !$isSubjectiveCriteria ? 'short_answer' : 'subjective'));
+
+            return buildSubItemEntry($qNum, $rawAnswerTrim, $score, $criteria, $subAnswers, $subType);
         }
 
         // 패턴 B: (1) 육지의 물 (2) 바닷물  또는 (1) ○ (2) ○ (3) ✕  또는 (1) ㉡ (2) ㉠ (Q9, Q10, Q12)
@@ -659,6 +686,34 @@ if (!function_exists('bindAnswerKeyToRois')) {
                 $first['sub_type'] = $ansInfo['type'] ?? $first['sub_type'];
                 unset($first['ans_rois']);
                 $collapsedRois[] = $first;
+            } elseif ($ansInfo && !empty($ansInfo['is_sub_item']) && !empty($ansInfo['sub_answers']) && count($ansInfo['sub_answers']) >= 2 && count($qGroup) === 1) {
+                // [소문항 분할 역교정] 정답표에 소문항(sub_answers >= 2)이 명시되어 있는데
+                // 시험지 ROI가 단일 문항 1개로만 인식된 경우, 단일 ROI를 가로로 소문항 개수만큼 분할 복원
+                $orig = $qGroup[0];
+                $subAnswers = $ansInfo['sub_answers'];
+                $subCount = count($subAnswers);
+                $origAns = $orig['ans_roi'] ?? ['x' => 100, 'y' => 100, 'w' => 300, 'h' => 60];
+                $gap = 12;
+                $subW = max(45, (int)round(($origAns['w'] - $gap * ($subCount - 1)) / $subCount));
+                $subH = max(28, (int)$origAns['h']);
+
+                $sIdx = 1;
+                foreach ($subAnswers as $subAnsKey => $subAnsVal) {
+                    $subRoi = $orig;
+                    $subRoi['sub_id'] = $sIdx;
+                    $subRoi['display_num'] = "{$qNum}-{$sIdx}";
+                    $subRoi['type'] = 'sub_item';
+                    $subRoi['sub_type'] = $ansInfo['sub_type'] ?? 'short_answer';
+                    $subX = $origAns['x'] + ($sIdx - 1) * ($subW + $gap);
+                    $subRoi['ans_roi'] = [
+                        'x' => (int)round($subX),
+                        'y' => (int)$origAns['y'],
+                        'w' => (int)round($subW),
+                        'h' => (int)round($subH)
+                    ];
+                    $collapsedRois[] = $subRoi;
+                    $sIdx++;
+                }
             } else {
                 foreach ($qGroup as $item) {
                     $collapsedRois[] = $item;

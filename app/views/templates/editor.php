@@ -2188,7 +2188,11 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
             dragStartPos = { x: pos.x, y: pos.y };
 
-
+            // [사용자 편의 제스처] Ctrl(또는 Cmd) + 클릭 시 해당 위치 문항에 소문항 즉시 추가
+            if (e.ctrlKey || e.metaKey) {
+                handleAddSubItemAtPos(pos.x, pos.y);
+                return;
+            }
 
             const target = findRoiAtPos(pos.x, pos.y);
 
@@ -2259,6 +2263,25 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
         function onMouseMove(e) {
 
             const pos = getCanvasPos(e);
+
+            // [사용자 편의 제스처] Ctrl 키가 눌려있을 때 소문항 추가 프리뷰 제공
+            if ((e.ctrlKey || e.metaKey) && !dragMode) {
+                canvas.style.cursor = 'copy';
+                draw();
+                const previewW = 60, previewH = 35;
+                ctx.save();
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#8b5cf6';
+                ctx.setLineDash([4, 4]);
+                ctx.fillStyle = 'rgba(139, 92, 246, 0.25)';
+                ctx.fillRect(pos.x - previewW / 2, pos.y - previewH / 2, previewW, previewH);
+                ctx.strokeRect(pos.x - previewW / 2, pos.y - previewH / 2, previewW, previewH);
+                ctx.fillStyle = '#8b5cf6';
+                ctx.font = 'bold 12px sans-serif';
+                ctx.fillText('[Ctrl+클릭: 소문항 추가]', pos.x - previewW / 2, pos.y - previewH / 2 - 6);
+                ctx.restore();
+                return;
+            }
 
 
 
@@ -2668,15 +2691,18 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
                         selectedRoiIndex = (selectedRoiIndex === activeTarget.itemIndex) ? null : activeTarget.itemIndex;
 
+                        renderSidebar();
+
+                        draw();
+
                     } else if (activeTarget.roiType === 'ans_roi' || activeTarget.roiType === 'ans_rois') {
 
                         selectedRoiIndex = activeTarget.itemIndex;
 
+                        // [사용자 요구 반영] 답안 영역 안을 마우스 클릭할 때 문제 유형 순환 변경 (소문항 포함)
+                        cycleRoiType(activeTarget.itemIndex);
+
                     }
-
-                    renderSidebar();
-
-                    draw();
 
                 } else {
 
@@ -2948,19 +2974,7 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
             }
 
-
-
-            const pos = getCanvasPos(e);
-
-            const target = findRoiAtPos(pos.x, pos.y);
-
-            if (target && (target.roiType === 'ans_roi' || target.roiType === 'ans_rois')) {
-
-                e.preventDefault();
-
-                cycleRoiType(target.itemIndex);
-
-            }
+            // 시험지 스크롤과 충돌하는 마우스 휠에 의한 문제 유형 변경 동작은 제거됨 (답안 영역 클릭으로 대체)
 
         }
 
@@ -3737,7 +3751,7 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
 
 
-        // ponytail: 답안 영역 클릭/휠 시 유형 순환 (1개일 때 4대 유형 순환, 2개 이상일 때 소문항 ⇄ 복합 제한)
+        // ponytail: 답안 영역 클릭 시 유형 순환 (단일 문항 4대 유형 순환 및 소문항 sub_type 순환)
 
         function cycleRoiType(idx) {
 
@@ -3751,19 +3765,55 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
             const subCount = parentKey ? rois.filter(x => x.num_roi && `${x.page_uid}_${Math.round(x.num_roi.x)}_${Math.round(x.num_roi.y)}` === parentKey).length : 1;
 
-            const hasMultipleAns = subCount > 1;
+            const hasMultipleAns = subCount > 1 || item.type === 'sub_item';
+
+            const order = ['objective', 'short_answer', 'matching_line', 'subjective'];
 
 
 
             if (hasMultipleAns) {
 
-                // 답안 영역이 이미 2개 이상: 유형 변경 없이 현재 상태 유지
+                // [사용자 요구 반영] 소문항 문항의 문제 유형(sub_type)을 순환 변경 (소문항 구조 유지)
+
+                const curType = item.sub_type || 'objective';
+
+                const curIdx = order.indexOf(curType);
+
+                const nextType = order[(curIdx + 1) % order.length];
+
+
+
+                pushUndoState();
+
+
+
+                const targetId = item.id;
+
+                rois.forEach(r => {
+
+                    if (r.type === 'sub_item') {
+
+                        const rPk = r.num_roi ? `${r.page_uid}_${Math.round(r.num_roi.x)}_${Math.round(r.num_roi.y)}` : null;
+
+                        if ((parentKey && rPk === parentKey) || r.id === targetId) {
+
+                            r.sub_type = nextType;
+
+                        }
+
+                    }
+
+                });
+
+
+
+                draw();
+
+                renderSidebar();
 
             } else {
 
                 // 답안 영역이 1개: 4대 유형 순환 (객관식 ➔ 단답/OX ➔ 선잇기 ➔ 서술형)
-
-                const order = ['objective', 'short_answer', 'matching_line', 'subjective'];
 
                 const curType = getDisplayType(item);
 
@@ -3781,13 +3831,293 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
 
 
+        // [Ctrl+마우스 클릭 모션] 클릭 지점의 문항을 인식해 소문항 ROI 자동 추가
+
+        function handleAddSubItemAtPos(x, y) {
+
+            const currentPg = pages[activePageIndex];
+
+            if (!currentPg) return;
+
+
+
+            const pageRois = [];
+
+            rois.forEach((r, idx) => {
+
+                if (r && (r.page_uid === currentPg.page_uid || r.page === currentPg.page_num)) {
+
+                    pageRois.push({ roi: r, index: idx });
+
+                }
+
+            });
+
+
+
+            if (pageRois.length === 0) return;
+
+
+
+            // 클릭한 X좌표의 단(Column) 판정
+
+            const isLeftClick = (x < canvas.width * 0.52);
+
+
+
+            // 같은 단에 속하고 문항 번호 Y좌표가 클릭 위치보다 위에 있는 문항 탐색
+
+            let candidates = pageRois.filter(item => {
+
+                const nr = item.roi.num_roi;
+
+                if (!nr) return false;
+
+                const isItemLeft = (nr.x < canvas.width * 0.52);
+
+                if (canvas.width > 800 && isItemLeft !== isLeftClick) return false;
+
+                return nr.y <= y + 25;
+
+            });
+
+
+
+            if (candidates.length === 0) {
+
+                const colItems = pageRois.filter(item => {
+
+                    const nr = item.roi.num_roi;
+
+                    if (!nr) return true;
+
+                    return canvas.width <= 800 || ((nr.x < canvas.width * 0.52) === isLeftClick);
+
+                });
+
+                if (colItems.length > 0) {
+
+                    colItems.sort((a, b) => {
+
+                        const ay = a.roi.num_roi ? a.roi.num_roi.y : 0;
+
+                        const by = b.roi.num_roi ? b.roi.num_roi.y : 0;
+
+                        return Math.abs(ay - y) - Math.abs(by - y);
+
+                    });
+
+                    candidates = [colItems[0]];
+
+                } else {
+
+                    candidates = pageRois;
+
+                }
+
+            }
+
+
+
+            candidates.sort((a, b) => {
+
+                const ay = a.roi.num_roi ? a.roi.num_roi.y : 0;
+
+                const by = b.roi.num_roi ? b.roi.num_roi.y : 0;
+
+                return by - ay;
+
+            });
+
+
+
+            const matched = candidates[0];
+
+            const targetItem = matched.roi;
+
+            const targetId = targetItem.id;
+
+
+
+            pushUndoState();
+
+
+
+            let boxW = 60, boxH = 35;
+
+            if (targetItem.ans_roi && targetItem.ans_roi.w > 20 && targetItem.ans_roi.h > 15) {
+
+                if (targetItem.ans_roi.w < 250) {
+
+                    boxW = targetItem.ans_roi.w;
+
+                    boxH = targetItem.ans_roi.h;
+
+                }
+
+            }
+
+            const newX = Math.max(10, Math.min(canvas.width - boxW - 10, Math.round(x - boxW / 2)));
+
+            const newY = Math.max(10, Math.min(canvas.height - boxH - 10, Math.round(y - boxH / 2)));
+
+            const newRect = { x: newX, y: newY, w: boxW, h: boxH };
+
+
+
+            if (targetItem.type === 'sub_item') {
+
+                let lastSubIdx = -1;
+
+                let maxSubId = 0;
+
+                for (let i = 0; i < rois.length; i++) {
+
+                    if (rois[i].id === targetId && rois[i].type === 'sub_item') {
+
+                        lastSubIdx = i;
+
+                        if (rois[i].sub_id && rois[i].sub_id > maxSubId) {
+
+                            maxSubId = rois[i].sub_id;
+
+                        }
+
+                    }
+
+                }
+
+                const nextSubId = maxSubId + 1;
+
+                const newSub = {
+
+                    id: targetId,
+
+                    sub_id: nextSubId,
+
+                    display_num: `${targetId}-${nextSubId}`,
+
+                    page_uid: targetItem.page_uid,
+
+                    page: targetItem.page,
+
+                    num_roi: targetItem.num_roi,
+
+                    ans_roi: newRect,
+
+                    ans_rois: null,
+
+                    type: 'sub_item',
+
+                    sub_type: targetItem.sub_type || 'objective',
+
+                    answer: '',
+
+                    score: 0
+
+                };
+
+                rois.splice(lastSubIdx + 1, 0, newSub);
+
+                selectedRoiIndex = lastSubIdx + 1;
+
+            } else {
+
+                const origType = targetItem.type || 'objective';
+
+                targetItem.type = 'sub_item';
+
+                targetItem.sub_type = origType;
+
+                targetItem.sub_id = 1;
+
+                targetItem.display_num = `${targetId}-1`;
+
+
+
+                const newSub = {
+
+                    id: targetId,
+
+                    sub_id: 2,
+
+                    display_num: `${targetId}-2`,
+
+                    page_uid: targetItem.page_uid,
+
+                    page: targetItem.page,
+
+                    num_roi: targetItem.num_roi,
+
+                    ans_roi: newRect,
+
+                    ans_rois: null,
+
+                    type: 'sub_item',
+
+                    sub_type: origType,
+
+                    answer: '',
+
+                    score: 0
+
+                };
+
+                const targetIdx = rois.indexOf(targetItem);
+
+                rois.splice(targetIdx + 1, 0, newSub);
+
+                selectedRoiIndex = targetIdx + 1;
+
+            }
+
+
+
+            reindexRois();
+
+            draw();
+
+            renderSidebar();
+
+        }
+
+
+
         function startAddAnsRoiMode(idx) {
+
+            const item = rois[idx];
+
+            if (!item) return;
+
+
+
+            // [단일 문항 대응] 단일 문항에서 소문항 추가 모드로 진입 시 첫 소문항(Q-1)으로 자동 승격
+
+            if (item.type !== 'sub_item') {
+
+                pushUndoState();
+
+                const origType = item.type || 'objective';
+
+                item.type = 'sub_item';
+
+                item.sub_type = origType;
+
+                item.sub_id = 1;
+
+                item.display_num = `${item.id}-1`;
+
+                reindexRois();
+
+            }
+
+
 
             addAnsTargetIndex = idx;
 
             selectedRoiIndex = idx;
 
-            const item = rois[idx];
+
 
             if (item) {
 
@@ -4282,7 +4612,19 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
             const isSingleTarget = ['objective', 'short_answer', 'matching_line', 'subjective'].includes(type);
 
-
+            // [사용자 편의 개선] 소문항 문항에서 사이드바 유형 버튼 클릭 시: 소문항들을 삭제하지 않고 소문항 그룹의 세부 유형(sub_type)을 일괄 변경
+            if (isSingleTarget && r.type === 'sub_item') {
+                pushUndoState();
+                const targetId = r.id;
+                rois.forEach(sr => {
+                    if (sr.type === 'sub_item' && ((pk && sr.num_roi && `${sr.page_uid}_${Math.round(sr.num_roi.x)}_${Math.round(sr.num_roi.y)}` === pk) || sr.id === targetId)) {
+                        sr.sub_type = type;
+                    }
+                });
+                draw();
+                renderSidebar();
+                return;
+            }
 
             if (isSingleTarget && isSubMulti) {
 
@@ -5383,10 +5725,9 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
 
 
-                const addSubBtn = (isSubItem && isLastSubInGroup)
-
+                // [2-a 요구사항 해결] 소문항이 이미 설정된 문항뿐 아니라, 단일 문항에서도 소문항 추가 버튼을 항상 표시
+                const addSubBtn = (!isSubItem || isLastSubInGroup)
                     ? `<button class="btn-add-sub" onclick="event.stopPropagation(); startAddAnsRoiMode(${idx})">➕ 소문항</button>`
-
                     : '';
 
 
