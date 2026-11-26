@@ -4,7 +4,6 @@
 
 # 생성/사용자 데이터 — 커밋 대상 아님
 app/public/uploads/
-public/uploads/
 
 # 로컬 전용 백업 및 작업 폴더 (프로젝트 코드와 무관)
 .v1104/
@@ -32,17 +31,8 @@ template_debug_run.php
 template_debug_result_*.json
 tmp_analysis/
 
-# 루트 복제본 및 구성 파일 (커밋 금지)
-/api/
-/lib/
-vercel.json
-tsconfig.json
-package.json
-package-lock.json
+# 로컬 구성 파일 (커밋 금지)
 php_cli.ini
-
-# Node 모듈 (커밋 금지)
-node_modules/
 
 # 시험지 PDF (커밋 금지 — 로컬 전용)
 *.pdf
@@ -55,7 +45,6 @@ dev/ftp_fix_config.py
 dev/ftp_upload_debug*.py
 dev/ftp_upload_tempdebug.py
 dev/url_test*.py
-dev/db/
 dev/.commit_msg.txt
 dev/docs/QUESTION_TYPE_SYSTEM.md
 app/views/grading/roi_inspector.php
