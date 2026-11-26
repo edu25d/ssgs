@@ -642,6 +642,199 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
         }
 
+        /* =========================================================
+           소문항 대문항 그룹 (Sub-Question Group Container)
+           ========================================================= */
+        .roi-subgroup-card {
+            background: #23262d;
+            border: 1px solid #4338ca;
+            border-left: 5px solid #8b5cf6;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            padding: 10px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+        }
+
+        .roi-subgroup-card:hover {
+            border-color: #6366f1;
+            background: #272a32;
+        }
+
+        .roi-subgroup-card.has-focus {
+            border-color: #8b5cf6;
+            box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.4), 0 4px 12px rgba(0, 0, 0, 0.35);
+        }
+
+        .roi-subgroup-card.adding-sub-mode {
+            border-left-color: #c084fc !important;
+            box-shadow: 0 0 0 2px #8b5cf6, 0 4px 14px rgba(139, 92, 246, 0.4) !important;
+            animation: pulseSubBorder 1.2s infinite alternate;
+        }
+
+        .roi-subgroup-card.other-page {
+            opacity: 0.7;
+            background: #1c1e23;
+        }
+
+        /* 대문항 헤더 */
+        .subgroup-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            cursor: pointer;
+            padding-bottom: 4px;
+        }
+
+        .subgroup-header-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .subgroup-title {
+            font-size: 15px;
+            font-weight: 800;
+            color: #fbbf24;
+            letter-spacing: -0.2px;
+        }
+
+        .subgroup-badge {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 12px;
+            background: rgba(139, 92, 246, 0.2);
+            color: #c4b5fd;
+            border: 1px solid rgba(139, 92, 246, 0.4);
+            white-space: nowrap;
+        }
+
+        .subgroup-header-right {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .subgroup-score-badge {
+            font-size: 11.5px;
+            font-weight: 700;
+            color: #cbd5e1;
+            background: #18191c;
+            padding: 3px 8px;
+            border-radius: 4px;
+            border: 1px solid #3c4048;
+            white-space: nowrap;
+        }
+
+        .subgroup-score-badge .score-num {
+            color: #38bdf8;
+            font-weight: 800;
+            font-size: 12.5px;
+        }
+
+        /* 부분 점수 인정 토글 바 */
+        .subgroup-partial-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 10px;
+            background: #17191e;
+            border-radius: 6px;
+            border: 1px solid #334155;
+            gap: 8px;
+            user-select: none;
+        }
+
+        .subgroup-partial-bar .partial-score-label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #f1f5f9;
+            cursor: pointer;
+            margin: 0;
+        }
+
+        .subgroup-partial-bar .partial-score-label input[type="checkbox"] {
+            accent-color: #8b5cf6;
+            width: 15px;
+            height: 15px;
+            cursor: pointer;
+        }
+
+        .subgroup-partial-status {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 7px;
+            border-radius: 4px;
+            white-space: nowrap;
+        }
+
+        .subgroup-partial-status.is-partial {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.35);
+        }
+
+        .subgroup-partial-status.is-all-or-nothing {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.35);
+        }
+
+        /* 소문항 목록 트리 바디 */
+        .subgroup-children {
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+            padding-left: 10px;
+            border-left: 2px solid rgba(139, 92, 246, 0.35);
+            margin-left: 4px;
+            margin-top: 2px;
+        }
+
+        /* 개별 소문항 카드 */
+        .roi-item.sub-item-card {
+            background: #1c1e24;
+            border: 1px solid #333842;
+            border-left: 4px solid #8b5cf6;
+            border-radius: 6px;
+            padding: 7px 10px;
+            margin-bottom: 0;
+            transition: all 0.15s ease;
+            cursor: pointer;
+        }
+
+        .roi-item.sub-item-card:hover {
+            background: #242730;
+            border-color: #4b5260;
+        }
+
+        .roi-item.sub-item-card.selected-focus {
+            background: #1e293b !important;
+            border-color: #38bdf8 !important;
+            border-left-color: #38bdf8 !important;
+            border-left-width: 4px !important;
+            box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.3) !important;
+        }
+
+        .sub-item-pill {
+            font-size: 12px;
+            font-weight: 800;
+            color: #c4b5fd;
+            background: #2b223d;
+            padding: 2px 7px;
+            border-radius: 4px;
+            border: 1px solid #7c3aed;
+            white-space: nowrap;
+        }
+
 
 
         .roi-item-answer-row { display: flex; align-items: center; gap: 6px; width: 100%; }
@@ -2830,7 +3023,9 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
                             answer: '',
 
-                            score: 0
+                            score: 0,
+
+                            has_partial_score: targetItem.has_partial_score !== undefined ? targetItem.has_partial_score : true
 
                         };
 
@@ -3261,7 +3456,44 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
         }
 
+        // 소문항 그룹 부분 점수 인정 여부 일괄 토글
+        function toggleSubGroupPartialScore(parentId, isChecked) {
+            pushUndoState();
+            let updated = false;
+            rois.forEach(r => {
+                if (r.id === parentId && r.type === 'sub_item') {
+                    r.has_partial_score = isChecked;
+                    updated = true;
+                }
+            });
+            if (updated) {
+                renderSidebar();
+            }
+        }
 
+        // 소문항 대문항 및 전체 소문항 일괄 삭제
+        function deleteSubGroup(parentId) {
+            if (!confirm(`Q${parentId}번 대문항과 속한 모든 소문항을 삭제하시겠습니까?`)) return;
+            pushUndoState();
+            rois = rois.filter(r => !(r.id === parentId && r.type === 'sub_item'));
+            reindexRois();
+            draw();
+            renderSidebar();
+            renderPageTabs();
+        }
+
+        // 소문항 그룹 헤더 클릭 시 첫 소문항으로 포커스
+        function selectFirstSubInGroup(firstIndex) {
+            const item = rois[firstIndex];
+            if (!item) return;
+            const targetPageIdx = pages.findIndex(p => p.page_uid === item.page_uid || p.page_num === item.page);
+            if (targetPageIdx >= 0 && targetPageIdx !== activePageIndex) {
+                switchPage(targetPageIdx);
+            }
+            selectedRoiIndex = firstIndex;
+            draw();
+            renderSidebar();
+        }
 
         // 선 잇기 방향 설정 (세로형 / 가로형)
         function setMatchingDirection(idx, dir) {
@@ -4013,7 +4245,9 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
                     answer: '',
 
-                    score: 0
+                    score: 0,
+
+                    has_partial_score: targetItem.has_partial_score !== undefined ? targetItem.has_partial_score : true
 
                 };
 
@@ -4032,6 +4266,12 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
                 targetItem.sub_id = 1;
 
                 targetItem.display_num = `${targetId}-1`;
+
+                if (targetItem.has_partial_score === undefined) {
+
+                    targetItem.has_partial_score = true;
+
+                }
 
 
 
@@ -4059,7 +4299,9 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
                     answer: '',
 
-                    score: 0
+                    score: 0,
+
+                    has_partial_score: targetItem.has_partial_score !== undefined ? targetItem.has_partial_score : true
 
                 };
 
@@ -4106,6 +4348,12 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
                 item.sub_id = 1;
 
                 item.display_num = `${item.id}-1`;
+
+                if (item.has_partial_score === undefined) {
+
+                    item.has_partial_score = true;
+
+                }
 
                 reindexRois();
 
@@ -4612,15 +4860,10 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
             const isSingleTarget = ['objective', 'short_answer', 'matching_line', 'subjective'].includes(type);
 
-            // [사용자 편의 개선] 소문항 문항에서 사이드바 유형 버튼 클릭 시: 소문항들을 삭제하지 않고 소문항 그룹의 세부 유형(sub_type)을 일괄 변경
+            // [사용자 편의 개선] 소문항 문항에서 사이드바 유형 버튼 클릭 시: 해당 소문항의 세부 유형(sub_type) 변경
             if (isSingleTarget && r.type === 'sub_item') {
                 pushUndoState();
-                const targetId = r.id;
-                rois.forEach(sr => {
-                    if (sr.type === 'sub_item' && ((pk && sr.num_roi && `${sr.page_uid}_${Math.round(sr.num_roi.x)}_${Math.round(sr.num_roi.y)}` === pk) || sr.id === targetId)) {
-                        sr.sub_type = type;
-                    }
-                });
+                r.sub_type = type;
                 draw();
                 renderSidebar();
                 return;
@@ -5664,7 +5907,9 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
             const currentPg = pages[activePageIndex];
 
-
+            let currentSubGroupId = null;
+            let currentGroupCard = null;
+            let currentChildrenContainer = null;
 
             rois.forEach((r, idx) => {
 
@@ -5674,28 +5919,179 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
                 const isSubItem = (r.type === 'sub_item');
 
+                const subGroupCount = isSubItem ? rois.filter(rx => rx.type === 'sub_item' && rx.id === r.id).length : 0;
+
+                // 현재 추가 모드 진행 중인 문항인지 확인
+                const targetAddRoi = (addAnsTargetIndex !== null) ? rois[addAnsTargetIndex] : null;
+
+                const isAddingThisItem = targetAddRoi && (
+                    targetAddRoi.id === r.id ||
+                    (targetAddRoi.num_roi && r.num_roi && targetAddRoi.page_uid === r.page_uid && Math.round(targetAddRoi.num_roi.x) === Math.round(r.num_roi.x) && Math.round(targetAddRoi.num_roi.y) === Math.round(r.num_roi.y))
+                );
+
+                const isSubGroup = isSubItem && (subGroupCount > 1 || isAddingThisItem);
+
+                if (isSubGroup) {
+                    if (currentSubGroupId !== r.id) {
+                        currentSubGroupId = r.id;
+                        const groupItems = rois.filter(rx => rx.type === 'sub_item' && rx.id === r.id);
+                        const groupTotalScore = groupItems.reduce((sum, item) => sum + (item.score || 0), 0);
+                        const groupHasPartial = groupItems.some(item => Boolean(item.has_partial_score));
+                        const groupPages = [...new Set(groupItems.map(item => item.page))].sort((a, b) => a - b);
+                        const groupPageLabel = groupPages.length > 1 ? `${groupPages[0]}~${groupPages[groupPages.length - 1]}쪽` : `${groupPages[0]}쪽`;
+                        const isAnyFocused = rois.some((rx, i) => rx.type === 'sub_item' && rx.id === r.id && i === selectedRoiIndex);
+                        const isGroupCurrentPage = groupItems.some(rx => currentPg && (rx.page_uid === currentPg.page_uid || rx.page === currentPg.page_num));
+
+                        let lastSubIndex = idx;
+                        rois.forEach((rx, i) => { if (rx.type === 'sub_item' && rx.id === r.id) lastSubIndex = i; });
+
+                        currentGroupCard = document.createElement('div');
+                        currentGroupCard.className = `roi-subgroup-card ${isGroupCurrentPage ? '' : 'other-page'} ${isAnyFocused ? 'has-focus' : ''} ${isAddingThisItem ? 'adding-sub-mode' : ''}`;
+
+                        let groupHeaderHtml = `
+                            <div class="subgroup-header" onclick="selectFirstSubInGroup(${idx})">
+                                <div class="subgroup-header-left">
+                                    <span class="roi-page-tag">${groupPageLabel}</span>
+                                    <span class="subgroup-title">Q${r.id}</span>
+                                    <span class="subgroup-badge">소문항 ${groupItems.length}개</span>
+                                </div>
+                                <div class="subgroup-header-right">
+                                    <div class="subgroup-score-badge" title="소문항 배점 합계">
+                                        총 <span class="score-num">${groupTotalScore}</span>점
+                                    </div>
+                                    <button type="button" class="btn-add-sub" title="소문항 추가" onclick="event.stopPropagation(); startAddAnsRoiMode(${lastSubIndex})">➕ 소문항</button>
+                                    <button type="button" class="btn-delete" title="대문항 및 전체 소문항 삭제" onclick="event.stopPropagation(); deleteSubGroup(${r.id})">🗑️</button>
+                                </div>
+                            </div>
+                        `;
+
+                        let groupPartialBarHtml = `
+                            <div class="subgroup-partial-bar" onclick="event.stopPropagation()">
+                                <label class="partial-score-label" title="체크 시 소문항별 부분점수를 인정하며, 미체크 시 All-or-Nothing(모두 정답이어야 만점)으로 채점됩니다.">
+                                    <input type="checkbox" ${groupHasPartial ? 'checked' : ''} onchange="toggleSubGroupPartialScore(${r.id}, this.checked)">
+                                    <span>부분 점수 인정</span>
+                                </label>
+                                <span class="subgroup-partial-status ${groupHasPartial ? 'is-partial' : 'is-all-or-nothing'}">
+                                    ${groupHasPartial ? '✓ 소문항별 배점 인정' : '✕ All or Nothing (전체 일치 시 만점)'}
+                                </span>
+                            </div>
+                        `;
+
+                        let groupGuideHtml = isAddingThisItem
+                            ? `<div class="adding-sub-guide" style="margin: 4px 0 6px 0;">✏️ 시험지 위에 추가할 소문항을 드래그하세요 (완료: 휠 / ESC)</div>`
+                            : '';
+
+                        currentGroupCard.innerHTML = groupHeaderHtml + groupPartialBarHtml + groupGuideHtml;
+
+                        currentChildrenContainer = document.createElement('div');
+                        currentChildrenContainer.className = 'subgroup-children';
+                        currentGroupCard.appendChild(currentChildrenContainer);
+                        roiListContainer.appendChild(currentGroupCard);
+                    }
+
+                    // 개별 소문항 서브 카드 렌더링
+                    const isCurrentPage = currentPg && (r.page_uid === currentPg.page_uid || r.page === currentPg.page_num);
+                    const isFocused = (selectedRoiIndex === idx);
+                    const isThisAdding = targetAddRoi && (targetAddRoi === r || idx === addAnsTargetIndex);
+
+                    const subDiv = document.createElement('div');
+                    subDiv.className = `roi-item sub-item-card ${displayType} ${isCurrentPage ? '' : 'other-page'} ${isFocused ? 'selected-focus' : ''} ${isThisAdding ? 'adding-sub-mode' : ''}`;
+                    subDiv.draggable = true;
+                    subDiv.dataset.index = idx;
+
+                    if (isFocused || isThisAdding) {
+                        setTimeout(() => subDiv.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 50);
+                    }
+
+                    let subPlaceholder = '소문항 정답';
+                    if (displayType === 'matching_line') {
+                        subPlaceholder = '선잇기 정답 (예: (1)-㉢, (2)-㉡ 또는 1-ㄷ, 2-ㄴ)';
+                    } else if (displayType === 'essay') {
+                        subPlaceholder = '서술형 모범 답안 키워드 / 문장';
+                    } else if (displayType === 'short_answer') {
+                        subPlaceholder = '소문항 정답 (단답형 또는 OX)';
+                    } else if (displayType === 'objective') {
+                        subPlaceholder = '정답 번호 (예: 3)';
+                    }
+
+                    const subTypeToggleHtml = `
+                        <div class="type-toggle">
+                            <button type="button" class="type-btn ${displayType === 'objective' ? 'active obj' : ''}" onclick="event.stopPropagation(); setType(${idx}, 'objective')">객관식</button>
+                            <button type="button" class="type-btn ${displayType === 'short_answer' ? 'active short' : ''}" onclick="event.stopPropagation(); setType(${idx}, 'short_answer')">단답/OX</button>
+                            <button type="button" class="type-btn ${displayType === 'matching_line' ? 'active matching' : ''}" onclick="event.stopPropagation(); setType(${idx}, 'matching_line')">선잇기</button>
+                            <button type="button" class="type-btn ${displayType === 'subjective' ? 'active subj' : ''}" onclick="event.stopPropagation(); setType(${idx}, 'subjective')">주관식</button>
+                        </div>
+                    `;
+
+                    let subCriteriaHtml = '';
+                    if (displayType === 'subjective' && r.criteria && r.criteria.trim().length > 0) {
+                        subCriteriaHtml = `
+                            <div class="criteria-banner" onclick="event.stopPropagation()">
+                                <span class="criteria-icon">📋</span>
+                                <div class="criteria-text"><strong>채점 기준:</strong> ${escapeHtml(r.criteria)}</div>
+                            </div>
+                        `;
+                    }
+
+                    subDiv.innerHTML = `
+                        <div class="roi-item-main-row">
+                            <div class="roi-row-left">
+                                <span class="sub-item-pill">Q${r.display_num}</span>
+                            </div>
+                            ${subTypeToggleHtml}
+                            <div class="roi-row-right">
+                                <div class="score-wrap" onclick="event.stopPropagation()">
+                                    <input type="number" step="0.5" class="input-score" value="${r.score}" 
+                                           onchange="updateIndividualScore(${idx}, this.value)" 
+                                           title="소문항 배점"> 점
+                                </div>
+                                <button type="button" class="btn-delete" title="소문항 삭제" onclick="event.stopPropagation(); deleteRoi(${idx})">🗑️</button>
+                            </div>
+                        </div>
+                        <div class="roi-item-answer-row">
+                            <input type="text" class="input-answer" 
+                                   placeholder="${subPlaceholder}" 
+                                   value="${escapeHtml(r.answer || '')}" 
+                                   onclick="event.stopPropagation()"
+                                   oninput="handleAnswerInput(${idx}, this.value)"
+                                   onchange="handleAnswerChange(${idx}, this.value)">
+                        </div>
+                        ${subCriteriaHtml}
+                    `;
+
+                    subDiv.onclick = (e) => {
+                        e.stopPropagation();
+                        if (addAnsTargetIndex !== null && !isThisAdding) {
+                            addAnsTargetIndex = null;
+                            reindexRois();
+                        }
+                        const targetPageIdx = pages.findIndex(p => p.page_uid === r.page_uid || p.page_num === r.page);
+                        const willSelect = (selectedRoiIndex !== idx);
+                        if (targetPageIdx >= 0 && targetPageIdx !== activePageIndex) {
+                            switchPage(targetPageIdx);
+                        }
+                        selectedRoiIndex = willSelect ? idx : null;
+                        draw();
+                        renderSidebar();
+                    };
+
+                    subDiv.addEventListener('dragstart', handleDragStart);
+                    subDiv.addEventListener('dragover', handleDragOver);
+                    subDiv.addEventListener('drop', handleDrop);
+
+                    currentChildrenContainer.appendChild(subDiv);
+                    return; // 소문항 렌더링 완료 후 단일 문항 렌더링 스킵
+                }
+
+                currentSubGroupId = null;
+                currentGroupCard = null;
+                currentChildrenContainer = null;
 
                 const displayLabel = r.display_num ? `Q${r.display_num}` : `Q${r.id}`;
 
                 const isCurrentPage = currentPg && (r.page_uid === currentPg.page_uid || r.page === currentPg.page_num);
 
                 const isFocused = (selectedRoiIndex === idx);
-
-
-
-                // 현재 추가 모드 진행 중인 문항인지 확인
-
-                const targetAddRoi = (addAnsTargetIndex !== null) ? rois[addAnsTargetIndex] : null;
-
-                const isAddingThisItem = targetAddRoi && (
-
-                    targetAddRoi.id === r.id ||
-
-                    (targetAddRoi.num_roi && r.num_roi && targetAddRoi.page_uid === r.page_uid && Math.round(targetAddRoi.num_roi.x) === Math.round(r.num_roi.x) && Math.round(targetAddRoi.num_roi.y) === Math.round(r.num_roi.y))
-
-                );
-
-
 
                 const div = document.createElement('div');
 
@@ -5711,19 +6107,10 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
 
                 }
 
-
-
                 // 소문항 그룹의 마지막 소문항인지 확인
-
                 const isLastSubInGroup = isSubItem && (
-
                     idx === rois.length - 1 || rois[idx + 1].type !== 'sub_item' || rois[idx + 1].id !== r.id
-
                 );
-
-                const subGroupCount = isSubItem ? rois.filter(rx => rx.type === 'sub_item' && rx.id === r.id).length : 0;
-
-
 
                 // [2-a 요구사항 해결] 소문항이 이미 설정된 문항뿐 아니라, 단일 문항에서도 소문항 추가 버튼을 항상 표시
                 const addSubBtn = (!isSubItem || isLastSubInGroup)
@@ -6697,7 +7084,7 @@ function renderMatchingCropPreviews() {
 
             if (!r) return;
 
-            const newScore = parseInt(val) || 0;
+            const newScore = parseFloat(val) || 0;
 
             r.score = newScore;
 

@@ -43,7 +43,7 @@ foreach ($roiData as $idx => $item) {
     $item['type'] = (string)($item['type'] ?? 'objective');
     $item['sub_type'] = isset($item['sub_type']) ? (string)$item['sub_type'] : null;
     $item['answer'] = (string)($item['answer'] ?? '');
-    $item['score'] = (int)($item['score'] ?? 0);
+    $item['score'] = is_numeric($item['score'] ?? 0) ? (floor($item['score']) == $item['score'] ? (int)$item['score'] : (float)$item['score']) : 0;
     $item['has_partial_score'] = (bool)($item['has_partial_score'] ?? false);
     if (!isset($item['sub_scores']) || !is_array($item['sub_scores'])) {
         $item['sub_scores'] = (object)[];
