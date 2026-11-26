@@ -65,3 +65,5 @@ app/views/grading/roi_inspector.php
 
 # MCP Playwright 테스트 디렉터리
 .playwright-mcp/
+
+dev/remote_backup/
