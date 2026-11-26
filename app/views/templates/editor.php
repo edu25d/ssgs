@@ -498,10 +498,10 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
         /* =========================================================
            4. 우측 사이드바 (.sidebar)
            ========================================================= */
-        .sidebar {
+                .sidebar {
             width: 440px;
-            min-width: 380px;
-            max-width: 500px;
+            min-width: 280px;
+            max-width: calc(100vw - 320px);
             flex: 0 0 auto;
             background: #141c2b;
             border-left: 1px solid var(--border-subtle);
@@ -510,6 +510,44 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
             flex-direction: column;
             overflow: hidden;
             box-shadow: -4px 0 20px rgba(0,0,0,0.25);
+        }
+
+        /* 좌우 분할 조절 스플리터 리사이저 바 */
+        .gutter-resizer {
+            width: 8px;
+            cursor: col-resize;
+            background: #0d1424;
+            border-left: 1px solid rgba(255, 255, 255, 0.05);
+            border-right: 1px solid rgba(0, 0, 0, 0.3);
+            position: relative;
+            flex-shrink: 0;
+            transition: background 0.15s ease;
+            z-index: 15;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+        }
+        .gutter-resizer::after {
+            content: "";
+            width: 2px;
+            height: 38px;
+            background: #334155;
+            border-radius: 2px;
+            transition: all 0.15s ease;
+        }
+        .gutter-resizer:hover,
+        .gutter-resizer.is-dragging {
+            background: rgba(2, 132, 199, 0.3);
+        }
+        .gutter-resizer:hover::after,
+        .gutter-resizer.is-dragging::after {
+            background: #38bdf8;
+            height: 64px;
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.7);
+        }
+        @media (max-width: 768px) {
+            .gutter-resizer { display: none !important; }
         }
 
         /* 스마트 배점 컨트롤 패널 */
@@ -1197,6 +1235,9 @@ $privacyMaskData = getOrDetectPrivacyMaskRois($pdo, $id, $template);
             </div>
         </div>
 
+        <!-- 좌우 너비 조절 리사이저 바 -->
+        <div class="gutter-resizer" id="editorResizer" title="마우스로 드래그하여 캔버스와 문항 패널 너비 조절"></div>
+
         <!-- 우측: 사이드바 패널 -->
         <div class="sidebar">
             <div class="score-control-panel">
@@ -1361,6 +1402,81 @@ window.addEventListener('keydown', function(e) {
         saveTemplate();
     }
 });
+
+// ============================================================================
+// 마우스 드래그 좌우 너비 조절 (Splitter Resizer) & 로컬스토리지 복원
+// ============================================================================
+function initSplitterResizer() {
+    const resizer = document.getElementById('editorResizer');
+    const sidebar = document.querySelector('.sidebar');
+    if (!resizer || !sidebar) return;
+
+    // 이전에 저장된 사용자 너비 복원
+    try {
+        const savedW = localStorage.getItem('editor_sidebar_width');
+        if (savedW && window.innerWidth >= 768) {
+            const numW = parseInt(savedW, 10);
+            const maxAllowed = window.innerWidth - 320;
+            if (!isNaN(numW) && numW >= 280 && numW <= maxAllowed) {
+                sidebar.style.width = numW + 'px';
+            }
+        }
+    } catch (e) {}
+
+    let isDragging = false;
+    let startX = 0;
+    let startWidth = 0;
+
+    resizer.addEventListener('mousedown', function(e) {
+        if (window.innerWidth < 768) return;
+        isDragging = true;
+        startX = e.clientX;
+        startWidth = sidebar.getBoundingClientRect().width;
+
+        resizer.classList.add('is-dragging');
+        document.body.style.userSelect = 'none';
+        document.body.style.cursor = 'col-resize';
+        e.preventDefault();
+    });
+
+    window.addEventListener('mousemove', function(e) {
+        if (!isDragging) return;
+        const dx = e.clientX - startX;
+        let newWidth = startWidth - dx; // 마우스를 왼쪽으로 당기면 사이드바 너비 증가
+
+        const minWidth = 280;
+        const maxWidth = Math.max(minWidth, window.innerWidth - 320);
+
+        if (newWidth < minWidth) newWidth = minWidth;
+        if (newWidth > maxWidth) newWidth = maxWidth;
+
+        sidebar.style.width = newWidth + 'px';
+    });
+
+    window.addEventListener('mouseup', function() {
+        if (!isDragging) return;
+        isDragging = false;
+        resizer.classList.remove('is-dragging');
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+
+        const finalWidth = Math.round(sidebar.getBoundingClientRect().width);
+        try {
+            localStorage.setItem('editor_sidebar_width', finalWidth);
+        } catch (e) {}
+
+        // 캔버스 크기 재계산 및 뷰포트 재드로우
+        if (typeof draw === 'function') {
+            requestAnimationFrame(draw);
+        }
+    });
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initSplitterResizer);
+} else {
+    initSplitterResizer();
+}
 
 
 
