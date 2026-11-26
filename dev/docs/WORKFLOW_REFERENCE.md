@@ -8,8 +8,6 @@
 
 ## 1. 사용 레포지토리 (단일)
 
-**오직 이 레포만 사용한다.** 이전 `ssg`(`https://github.com/edu25d/ssg.git`)은 신경 쓰지 않는다.
-
 - 원격 이름: `ssgs`
 - URL: `https://github.com/edu25d/ssgs.git`
 - 브랜치: `master`
@@ -17,17 +15,15 @@
 
 현재 로컬 설정:
 ```
-origin  →  https://github.com/edu25d/ssg.git   (무시, 사용 안 함)
 ssgs    →  https://github.com/edu25d/ssgs.git   (실제 사용)
 ```
 
-> **참고:** `git remote remove origin`은 하지 않았다. 단순히 `ssgs`로만 푸시하면 된다.
 
 ---
 
 ## 2. Python 실행 환경
 
-**재설치한 Python 3.15 (64-bit) 사용.**
+** Python 3.15 (64-bit) 사용.**
 
 - 실행 파일 경로: `C:/Users/USER/AppData/Local/Programs/Python/Python315/python.exe`
 - 버전: Python 3.15.2
@@ -40,8 +36,6 @@ cd C:/Users/USER/Documents/ssg-new
 ```
 
 스크립트는 `app/.env`에서 `FTP_PASSWORD`를 읽으므로, 명령행 인자로 비밀번호를 전달하지 않는다(히스토리 노출 방지).
-
-> **주의:** 구 Python(`C:/Users/USER/AppData/Local/Python/pythoncore-3.14-64/python.exe`)은 출력 문제로 사용 불가. 반드시 위 3.15 경로로 실행한다.
 
 ---
 
@@ -116,7 +110,7 @@ git status                                # 로컬 준비 상태 확인
 
 ```bash
 # 작업 디렉지로 이동
-cd C:/Users/USER/Documents/ssg-new
+cd C:/Users/USER/Documents/ssg
 
 # 1. 변경분 확인
 git status
