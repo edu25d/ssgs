@@ -21,7 +21,7 @@ require_once APP_ROOT . '/includes/google/google_drive_helper.php';
 
 try {
     $stmt = $pdo->prepare("
-        SELECT t.title AS template_name, t.roi_data, c.id AS class_id, c.class_name, c.sheet_id, c.class_salt, COALESCE(a.show_answer, 0) AS show_answer 
+        SELECT t.title AS template_name, t.roi_data, t.pages_data, t.image_path, c.id AS class_id, c.class_name, c.sheet_id, c.class_salt, COALESCE(a.show_answer, 0) AS show_answer 
         FROM assignments a 
         JOIN templates t ON a.template_id = t.id 
         LEFT JOIN classes c ON a.class_id = c.id
@@ -32,7 +32,7 @@ try {
     $showAnswer = (int)($info['show_answer'] ?? 0);
 } catch (Exception $e) {
     $stmt = $pdo->prepare("
-        SELECT t.title AS template_name, t.roi_data, c.id AS class_id, c.class_name, c.sheet_id, c.class_salt 
+        SELECT t.title AS template_name, t.roi_data, t.pages_data, t.image_path, c.id AS class_id, c.class_name, c.sheet_id, c.class_salt 
         FROM assignments a 
         JOIN templates t ON a.template_id = t.id 
         LEFT JOIN classes c ON a.class_id = c.id
@@ -44,9 +44,24 @@ try {
 if (!$info) {
     die("과제를 찾을 수 없거나 열람 권한이 없습니다.");
 }
-$templateName = $info['template_name'] ?? '평가 점검';
-$className    = $info['class_name'] ?? '';
-$examName     = $templateName . ($className ? ' - ' . $className : '');
+$templateName      = $info['template_name'] ?? '평가 점검';
+$className         = $info['class_name'] ?? '';
+$examName          = $templateName . ($className ? ' - ' . $className : '');
+$templateImagePath = $info['image_path'] ?? '';
+$templatePagesData = [];
+if (!empty($info['pages_data'])) {
+    $templatePagesData = json_decode($info['pages_data'], true) ?: [];
+}
+if (empty($templatePagesData) && !empty($templateImagePath)) {
+    $templatePagesData = [[
+        'page_uid'   => 'p_1_default',
+        'page_num'   => 1,
+        'title'      => '1쪽',
+        'image_path' => $templateImagePath,
+        'width'      => 1200,
+        'height'     => 1700
+    ]];
+}
 $templateRois = [];
 if (!empty($info['roi_data'])) {
     $templateRois = json_decode($info['roi_data'], true) ?: [];
@@ -103,6 +118,7 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
     <meta charset="UTF-8">
     <title><?= e($templateName) ?><?= $className ? ' (' . e($className) . ')' : '' ?> - 채점 검수</title>
     <link rel="stylesheet" href="/public/assets/css/dashboard.css">
+    <link rel="stylesheet" href="/public/assets/css/reverse_print.css">
     <style>
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", Roboto, sans-serif; 
@@ -1035,6 +1051,11 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
                 🖨️ 정오표
             </a>
 
+            <!-- 시험지 역인쇄 (원본 시험지 위 채점 오버레이 물리 인쇄) -->
+            <button type="button" class="btn-nav-reverse-print" onclick="ReversePrintEngine.openModal()" title="학생의 기존 원본 시험지 위에 채점 오버레이를 물리 인쇄합니다">
+                <span>🖨️</span> 시험지 역인쇄
+            </button>
+
             <!-- 동기화 상태 인디케이터 -->
             <div id="syncStatus" class="sync-status-indicator" title="서버와 실시간 동기화 완료">
                 <span class="sync-dot" id="syncDot"></span>
@@ -1086,6 +1107,8 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
     const studentNameLookup = <?= json_encode($studentNameLookup ?? [], JSON_UNESCAPED_UNICODE) ?>;
     const initialDbRows = <?= json_encode($initialRows, JSON_UNESCAPED_UNICODE) ?>;
     const templateRois = <?= json_encode($templateRois ?? [], JSON_UNESCAPED_UNICODE) ?>;
+    const templatePages = <?= json_encode($templatePagesData ?? [], JSON_UNESCAPED_UNICODE) ?>;
+    const templateImagePath = <?= json_encode($templateImagePath ?? '', JSON_UNESCAPED_UNICODE) ?>;
     
     const storageKey = `gradingState_${assignId}`;
     const savedState = JSON.parse(sessionStorage.getItem(storageKey) || '{}');
@@ -2568,5 +2591,10 @@ $initialRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
         }, { passive: false });
     }
 </script>
+
+<!-- 채점 역인쇄(Overprinting) 3단계 안전 인터로킹 모달 및 엔진 스크립트 -->
+<?php require_once __DIR__ . '/reverse_print_modal.php'; ?>
+<script src="/public/assets/js/pdf-lib.min.js"></script>
+<script src="/public/assets/js/reverse_print.js"></script>
 </body>
 </html>

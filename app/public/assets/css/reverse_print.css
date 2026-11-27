@@ -1,0 +1,495 @@
+/* ==========================================================================
+   쌤글라스(SsamGlass) 오버레이 투명 PDF 역인쇄(Reverse Overprinting) 전용 스타일
+   - 손실 프레이밍(Loss-Framing) 기반 3단계 안전 인터로킹 UI
+   - 1인칭 가이드 일러스트 및 양면 회전 선택 카드
+   ========================================================================== */
+
+/* 1. 네비게이션 헤더 역인쇄 버튼 */
+.btn-nav-reverse-print {
+    padding: 5px 12px;
+    background: #ef4444;
+    color: #ffffff !important;
+    border: 1.5px solid #dc2626;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 1px 2px rgba(239, 68, 68, 0.2);
+    text-decoration: none;
+}
+
+.btn-nav-reverse-print:hover {
+    background: #dc2626;
+    border-color: #b91c1c;
+    box-shadow: 0 2px 6px rgba(220, 38, 38, 0.35);
+    transform: translateY(-1px);
+}
+
+.btn-nav-reverse-print:active {
+    transform: translateY(0);
+}
+
+/* 2. 모달 오버레이 공통 백드롭 */
+.rp-modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(15, 23, 42, 0.65);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 99999;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.25s ease, visibility 0.25s ease;
+}
+
+.rp-modal-backdrop.rp-active {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* 3. 모달 컨테이너 팝업 */
+.rp-modal-container {
+    background: #ffffff;
+    width: 92%;
+    max-width: 580px;
+    border-radius: 16px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+    position: relative;
+    transform: scale(0.95) translateY(10px);
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.rp-modal-backdrop.rp-active .rp-modal-container {
+    transform: scale(1) translateY(0);
+}
+
+/* 모달 헤더 */
+.rp-modal-header {
+    padding: 18px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.rp-modal-title {
+    font-size: 17px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+}
+
+.rp-modal-close {
+    background: transparent;
+    border: none;
+    font-size: 20px;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 4px;
+    line-height: 1;
+    border-radius: 6px;
+    transition: all 0.15s;
+}
+
+.rp-modal-close:hover {
+    color: #0f172a;
+    background: #f1f5f9;
+}
+
+/* 모달 본문 */
+.rp-modal-body {
+    padding: 24px;
+    color: #1e293b;
+    font-size: 14.5px;
+    line-height: 1.6;
+}
+
+/* 모달 푸터 버튼 */
+.rp-modal-footer {
+    padding: 16px 24px;
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+/* ==========================================================================
+   Stage 1: 손실 프레이밍 경고 (Loss-Framing Warning)
+   ========================================================================== */
+.rp-card-stage1 {
+    border: 2px solid #ef4444 !important;
+    box-shadow: 0 10px 30px -5px rgba(239, 68, 68, 0.25);
+}
+
+.rp-card-stage1 .rp-modal-header {
+    background: #fef2f2;
+    border-bottom: 1.5px solid #fecaca;
+    color: #991b1b;
+}
+
+.rp-danger-banner {
+    background: #fff1f2;
+    border: 1px solid #fecdd3;
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 18px;
+    color: #9f1239;
+    font-size: 14.5px;
+}
+
+.rp-count-highlight {
+    display: inline-block;
+    background: #dc2626;
+    color: #ffffff;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-weight: 800;
+    font-size: 15px;
+    letter-spacing: -0.3px;
+    box-shadow: 0 1px 3px rgba(220, 38, 38, 0.3);
+}
+
+.rp-danger-alert-text {
+    font-size: 16px;
+    font-weight: 700;
+    color: #b91c1c;
+    margin: 10px 0 6px 0;
+}
+
+.rp-sub-instruction {
+    color: #64748b;
+    font-size: 13.5px;
+    margin-top: 4px;
+}
+
+/* 버튼 스타일 */
+.btn-rp-primary {
+    background: #dc2626;
+    color: #ffffff;
+    border: none;
+    padding: 11px 22px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 14.5px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s ease;
+    box-shadow: 0 2px 4px rgba(220, 38, 38, 0.25);
+}
+
+.btn-rp-primary:hover:not(:disabled) {
+    background: #b91c1c;
+    box-shadow: 0 4px 8px rgba(185, 28, 28, 0.35);
+    transform: translateY(-1px);
+}
+
+.btn-rp-ghost {
+    background: transparent;
+    color: #64748b;
+    border: 1px solid #cbd5e1;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 13.5px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-rp-ghost:hover {
+    background: #f1f5f9;
+    color: #334155;
+    border-color: #94a3b8;
+}
+
+/* ==========================================================================
+   Stage 2: 트레이 비우기 인터록 (Physical Tray Interlock)
+   ========================================================================== */
+.rp-card-stage2 {
+    border: 2px solid #f97316 !important;
+}
+
+.rp-card-stage2 .rp-modal-header {
+    background: #fff7ed;
+    border-bottom: 1.5px solid #fed7aa;
+    color: #9a3412;
+}
+
+.rp-warning-box {
+    background: #fffbeb;
+    border: 1.5px solid #fde68a;
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 20px;
+    color: #92400e;
+}
+
+.rp-interlock-checkbox-box {
+    background: #f8fafc;
+    border: 2px dashed #cbd5e1;
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin: 18px 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.rp-interlock-checkbox-box:hover {
+    background: #f1f5f9;
+    border-color: #94a3b8;
+}
+
+.rp-interlock-checkbox-box.checked {
+    background: #ecfdf5;
+    border-color: #10b981;
+    border-style: solid;
+}
+
+.rp-interlock-checkbox-box input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    accent-color: #10b981;
+    cursor: pointer;
+}
+
+.rp-interlock-checkbox-label {
+    font-size: 14.5px;
+    font-weight: 700;
+    color: #0f172a;
+    cursor: pointer;
+    user-select: none;
+}
+
+/* 버튼 비활성화 (인터록) */
+.btn-rp-primary:disabled {
+    background: #cbd5e1 !important;
+    color: #64748b !important;
+    border-color: #cbd5e1 !important;
+    cursor: not-allowed !important;
+    box-shadow: none !important;
+    transform: none !important;
+}
+
+/* ==========================================================================
+   Stage 3: 테스트 도장 확인 (Stamped Instruction)
+   ========================================================================== */
+.rp-card-stage3 {
+    border: 2px solid #2563eb !important;
+}
+
+.rp-card-stage3 .rp-modal-header {
+    background: #eff6ff;
+    border-bottom: 1.5px solid #bfdbfe;
+    color: #1e40af;
+}
+
+.rp-instruction-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-bottom: 20px;
+}
+
+.rp-step-item {
+    display: flex;
+    gap: 12px;
+    background: #f8fafc;
+    padding: 14px;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+}
+
+.rp-step-num {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #2563eb;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 800;
+    flex-shrink: 0;
+}
+
+.rp-stamp-action-box {
+    text-align: center;
+    padding: 16px;
+    background: #fff1f2;
+    border: 1px solid #fecdd3;
+    border-radius: 10px;
+    margin: 14px 0;
+}
+
+.btn-rp-stamp {
+    background: #ef4444;
+    color: #ffffff;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 14.5px;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 2px 4px rgba(239, 68, 68, 0.25);
+    transition: all 0.15s;
+}
+
+.btn-rp-stamp:hover {
+    background: #dc2626;
+    transform: translateY(-1px);
+}
+
+/* ==========================================================================
+   양면 넘김 선택 모달 (Duplex Orientation Modal)
+   ========================================================================== */
+.rp-duplex-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 20px 0;
+}
+
+.rp-duplex-card {
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 20px 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    background: #ffffff;
+    user-select: none;
+}
+
+.rp-duplex-card:hover {
+    border-color: #3b82f6;
+    background: #f8fafc;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.12);
+}
+
+.rp-duplex-card.selected {
+    border-color: #2563eb;
+    background: #eff6ff;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+}
+
+.rp-duplex-icon {
+    font-size: 38px;
+    margin-bottom: 10px;
+}
+
+.rp-duplex-title {
+    font-size: 16px;
+    font-weight: 800;
+    color: #0f172a;
+    margin-bottom: 4px;
+}
+
+.rp-duplex-sub {
+    font-size: 12.5px;
+    color: #64748b;
+    line-height: 1.4;
+}
+
+.rp-duplex-badge {
+    margin-top: 10px;
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 11.5px;
+    font-weight: 600;
+}
+
+.rp-duplex-badge.badge-book {
+    background: #e0f2fe;
+    color: #0369a1;
+}
+
+.rp-duplex-badge.badge-flip {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+/* ==========================================================================
+   비상 복구 (Synthetic Zero-Loss Reprint) 전용 패널
+   ========================================================================== */
+.rp-recovery-section {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px dashed #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.rp-link-recovery {
+    color: #64748b;
+    font-size: 12.5px;
+    text-decoration: underline;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: color 0.15s;
+}
+
+.rp-link-recovery:hover {
+    color: #ef4444;
+}
+
+/* 스피너 / 프로그레스 */
+.rp-spinner {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    border: 2.5px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: #ffffff;
+    animation: rp-spin 0.8s linear infinite;
+}
+
+@keyframes rp-spin {
+    to { transform: rotate(360deg); }
+}
+
+.rp-progress-bar {
+    width: 100%;
+    height: 8px;
+    background: #e2e8f0;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 12px;
+}
+
+.rp-progress-fill {
+    height: 100%;
+    background: #2563eb;
+    width: 0%;
+    transition: width 0.2s ease;
+}
+
+.rp-hidden {
+    display: none !important;
+}
